@@ -310,7 +310,7 @@ function TagsContent() {
                     {usedCount > 0 && (
                       <span className="text-[10px] text-muted-foreground/60">({usedCount})</span>
                     )}
-                    {!isDefault && usedCount === 0 && (
+                    {!isDefault && (
                       <button
                         onClick={() => handleDeleteCategory(key)}
                         className="hover:text-red-500 transition-colors"

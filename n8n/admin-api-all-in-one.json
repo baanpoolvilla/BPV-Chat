@@ -64,20 +64,10 @@
       "typeVersion": 2,
       "position": [0, 200],
       "parameters": {
-        "httpMethod": "GET",
-        "path": "admin/messages/:conversationId",
+        "httpMethod": "POST",
+        "path": "admin/messages/get",
         "responseMode": "responseNode",
         "options": {}
-      }
-    },
-    {
-      "id": "code-parse-msg-params",
-      "name": "Parse: Msg Params",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [180, 200],
-      "parameters": {
-        "jsCode": "const q = $json.query || {};\nconst conversationId = q.conversationId || '';\nreturn [{ json: { conversationId } }];"
       }
     },
     {
@@ -92,7 +82,7 @@
       },
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT\n  m.id::TEXT                                           AS id,\n  m.conversation_id::TEXT                              AS conversation_id,\n  m.sender_type,\n  m.direction,\n  m.message_type,\n  COALESCE(m.content_text, '')                         AS content_text,\n  m.created_at,\n  u.id::TEXT                                           AS sender_user_id,\n  COALESCE(u.display_name, u.external_user_id, m.sender_type) AS sender_name,\n  u.picture_url                                        AS sender_avatar\nFROM  messages m\nLEFT  JOIN users u ON m.sender_user_id = u.id\nWHERE m.conversation_id = '{{ $json.params.conversationId }}'::UUID\n  AND m.is_deleted = FALSE\nORDER BY m.created_at ASC\nLIMIT 200;",
+        "query": "SELECT\n  m.id::TEXT                                           AS id,\n  m.conversation_id::TEXT                              AS conversation_id,\n  m.sender_type,\n  m.direction,\n  m.message_type,\n  COALESCE(m.content_text, '')                         AS content_text,\n  m.created_at,\n  u.id::TEXT                                           AS sender_user_id,\n  COALESCE(u.display_name, u.external_user_id, m.sender_type) AS sender_name,\n  u.picture_url                                        AS sender_avatar\nFROM  messages m\nLEFT  JOIN users u ON m.sender_user_id = u.id\nWHERE m.conversation_id = '{{ $json.body.conversationId }}'::UUID\n  AND m.is_deleted = FALSE\nORDER BY m.created_at ASC\nLIMIT 200;",
         "options": {}
       }
     },
@@ -212,7 +202,7 @@
       "position": [0, 600],
       "parameters": {
         "httpMethod": "POST",
-        "path": "admin/conversations/:conversationId/tags",
+        "path": "admin/conversations/tags",
         "responseMode": "responseNode",
         "options": {}
       }
@@ -224,7 +214,7 @@
       "typeVersion": 2,
       "position": [240, 600],
       "parameters": {
-        "jsCode": "const params = $json.params || {};\nconst body   = $json.body   || {};\nconst conversationId = params.conversationId;\nconst tags = Array.isArray(body.tags) ? body.tags : [];\nconst cleaned = tags\n  .map((tag) => ({\n    name:  String(tag.name  || '').trim(),\n    color: String(tag.color || '#2563eb').trim(),\n  }))\n  .filter((tag) => tag.name.length > 0);\nreturn [{ json: { conversationId, tags: cleaned } }];"
+        "jsCode": "const body   = $json.body   || {};\nconst conversationId = body.conversationId || '';\nconst tags = Array.isArray(body.tags) ? body.tags : [];\nconst cleaned = tags\n  .map((tag) => ({\n    name:  String(tag.name  || '').trim(),\n    color: String(tag.color || '#2563eb').trim(),\n  }))\n  .filter((tag) => tag.name.length > 0);\nreturn [{ json: { conversationId, tags: cleaned } }];"
       }
     },
     {
@@ -350,7 +340,7 @@
       },
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT id::TEXT, name, color, scope FROM tags ORDER BY name;",
+        "query": "CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_name_scope ON tags (name, scope);\nSELECT id::TEXT, name, color, scope FROM tags ORDER BY name;",
         "options": {}
       }
     },

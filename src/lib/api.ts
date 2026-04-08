@@ -180,7 +180,8 @@ export const conversationsAPI = {
       return labels;
     }
 
-    const response = await n8nClient.post(`/admin/conversations/${id}/tags`, {
+    const response = await n8nClient.post('/admin/conversations/tags', {
+      conversationId: id,
       tags: labels.map((label) => ({ name: label.name, color: label.color })),
     });
 
@@ -214,8 +215,8 @@ export const messagesAPI = {
       return getMockConversationById(conversationId)?.messages || [];
     }
 
-    // N8N webhook: GET /admin/messages/:conversationId
-    const response = await n8nClient.get(`/admin/messages/${conversationId}`);
+    // N8N webhook: POST /admin/messages/get { conversationId }
+    const response = await n8nClient.post('/admin/messages/get', { conversationId });
     // N8N returns { messages: [...], total: N } — extract array
     const data = response.data;
     return Array.isArray(data) ? data : (data.messages || []);
