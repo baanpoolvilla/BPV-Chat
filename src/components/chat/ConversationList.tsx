@@ -51,11 +51,9 @@ export function ConversationList() {
   const {
     conversations,
     selectedConversationId,
-    conversationFilter,
     searchQuery,
     conversationsLoading,
     selectConversation,
-    setConversationFilter,
     setSearchQuery,
     fetchConversations,
   } = useChatStore();
@@ -67,7 +65,7 @@ export function ConversationList() {
 
   useEffect(() => {
     fetchConversations();
-  }, [conversationFilter, searchQuery]);
+  }, [searchQuery]);
 
   // Realtime polling — fetch conversation list every 10 seconds
   useEffect(() => {
@@ -75,7 +73,7 @@ export function ConversationList() {
       fetchConversations(true); // silent mode — no loading spinner
     }, 5000);
     return () => clearInterval(interval);
-  }, [conversationFilter, searchQuery]);
+  }, [searchQuery]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -86,9 +84,6 @@ export function ConversationList() {
 
   // Apply local filters
   const filteredConversations = conversations.filter((conv) => {
-    // Status filter (conversationFilter from store)
-    if (conversationFilter === 'open' && conv.status === 'resolved') return false;
-    if (conversationFilter === 'resolved' && conv.status !== 'resolved') return false;
     // Channel filter
     if (channelFilter !== 'all' && conv.channel !== channelFilter) return false;
     // Read status filter
@@ -111,12 +106,6 @@ export function ConversationList() {
     { id: 'instagram', label: 'IG', icon: <InstagramIcon className="h-3.5 w-3.5 text-[#e4405f]" /> },
   ];
 
-  const statusTabs = [
-    { id: 'all', label: 'ทั้งหมด' },
-    { id: 'open', label: 'กำลังสนทนา' },
-    { id: 'resolved', label: 'เสร็จสิ้น' },
-  ];
-
   const totalUnread = conversations.filter((c) => c.unreadCount > 0).length;
 
   return (
@@ -137,26 +126,6 @@ export function ConversationList() {
             >
               {ch.icon}
               <span>{ch.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Status Tabs (Bot/Admin) */}
-      <div className="border-b border-border px-3 pt-2">
-        <div className="flex gap-1">
-          {statusTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setConversationFilter(tab.id as any)}
-              className={cn(
-                'px-3 py-1.5 rounded-full text-xs font-medium transition-colors',
-                conversationFilter === tab.id
-                  ? 'bg-primary text-white'
-                  : 'text-muted-foreground hover:bg-muted'
-              )}
-            >
-              {tab.label}
             </button>
           ))}
         </div>

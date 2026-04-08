@@ -12,10 +12,8 @@ import {
   TrendingUp,
   Zap,
   ArrowRight,
-  Clock,
   BarChart3,
   Activity,
-  UserCheck,
 } from 'lucide-react';
 import { Loader } from 'lucide-react';
 import Link from 'next/link';
@@ -48,8 +46,6 @@ function DashboardContent() {
   // Derived stats
   const derived = useMemo(() => {
     const total = conversations.length;
-    const open = conversations.filter((c) => c.status !== 'resolved').length;
-    const resolved = conversations.filter((c) => c.status === 'resolved').length;
     const unread = conversations.filter((c) => c.unreadCount > 0).length;
     const lineCount = conversations.filter((c) => c.channel === 'line').length;
     const fbCount = conversations.filter((c) => c.channel === 'facebook').length;
@@ -69,7 +65,7 @@ function DashboardContent() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
 
-    return { total, open, resolved, unread, lineCount, fbCount, igCount, tagged, topTags };
+    return { total, unread, lineCount, fbCount, igCount, tagged, topTags };
   }, [conversations]);
 
   return (
@@ -88,19 +84,19 @@ function DashboardContent() {
           {/* Mini stat pills */}
           <div className="flex flex-wrap gap-3">
             <div className="bg-white/15 backdrop-blur-sm rounded-xl px-4 py-2 flex items-center gap-2">
-              <Activity className="h-4 w-4" />
-              <span className="text-sm font-semibold">{derived.open}</span>
-              <span className="text-xs text-white/70">กำลังสนทนา</span>
+              <MessageCircle className="h-4 w-4" />
+              <span className="text-sm font-semibold">{derived.total}</span>
+              <span className="text-xs text-white/70">บทสนทนา</span>
             </div>
             <div className="bg-white/15 backdrop-blur-sm rounded-xl px-4 py-2 flex items-center gap-2">
-              <MessageCircle className="h-4 w-4" />
+              <Activity className="h-4 w-4" />
               <span className="text-sm font-semibold">{derived.unread}</span>
               <span className="text-xs text-white/70">ยังไม่อ่าน</span>
             </div>
             <div className="bg-white/15 backdrop-blur-sm rounded-xl px-4 py-2 flex items-center gap-2">
-              <UserCheck className="h-4 w-4" />
-              <span className="text-sm font-semibold">{derived.resolved}</span>
-              <span className="text-xs text-white/70">เสร็จสิ้นแล้ว</span>
+              <Tag className="h-4 w-4" />
+              <span className="text-sm font-semibold">{derived.tagged}</span>
+              <span className="text-xs text-white/70">ติดแท็กแล้ว</span>
             </div>
           </div>
         </div>
@@ -131,7 +127,7 @@ function DashboardContent() {
 
           <Card
             className="border-none shadow-sm hover:shadow-md transition-all cursor-pointer hover:scale-[1.02]"
-            onClick={() => navigateToConversations('open')}
+            onClick={() => navigateToConversations('all')}
           >
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-3">
@@ -144,8 +140,8 @@ function DashboardContent() {
                   </span>
                 )}
               </div>
-              <p className="text-2xl font-bold">{derived.open}</p>
-              <p className="text-xs text-muted-foreground">กำลังสนทนา</p>
+              <p className="text-2xl font-bold">{derived.unread}</p>
+              <p className="text-xs text-muted-foreground">ยังไม่อ่าน</p>
             </CardContent>
           </Card>
 
@@ -161,15 +157,15 @@ function DashboardContent() {
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-sm hover:shadow-md transition-all cursor-pointer hover:scale-[1.02]" onClick={() => navigateToConversations('resolved')}>
+          <Card className="border-none shadow-sm hover:shadow-md transition-all cursor-pointer hover:scale-[1.02]" onClick={() => navigateToConversations('all')}>
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center">
                   <TrendingUp className="h-5 w-5 text-green-600" />
                 </div>
               </div>
-              <p className="text-2xl font-bold">{derived.resolved}</p>
-              <p className="text-xs text-muted-foreground">เสร็จสิ้นแล้ว</p>
+              <p className="text-2xl font-bold">{derived.lineCount}</p>
+              <p className="text-xs text-muted-foreground">LINE</p>
             </CardContent>
           </Card>
         </div>

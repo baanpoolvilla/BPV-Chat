@@ -25,7 +25,7 @@ export interface Tag {
   id: string;
   name: string;
   color: string;
-  scope?: 'global' | 'customer' | 'conversation';
+  scope?: string;
 }
 
 /** @deprecated use Tag */

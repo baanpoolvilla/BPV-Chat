@@ -491,10 +491,17 @@
                       "id":  "res-get-tags",
                       "name":  "RES: Get Tags",
                       "parameters":  {
-                                         "responseBody":  "={{ $json }}",
+                                         "responseBody":  "={{ JSON.stringify($json) }}",
                                          "respondWith":  "json",
                                          "options":  {
-
+                                                         "responseHeaders":  {
+                                                                                 "entries":  [
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Origin",
+                                                                                                     "value":  "*"
+                                                                                                 }
+                                                                                             ]
+                                                                             }
                                                      }
                                      },
                       "type":  "n8n-nodes-base.respondToWebhook",
@@ -532,7 +539,7 @@
                                                        }
                                       },
                       "parameters":  {
-                                         "query":  "INSERT INTO tags (name, color, scope) VALUES (\u0027{{ $json.body.name }}\u0027, \u0027{{ $json.body.color }}\u0027, \u0027global\u0027) ON CONFLICT (name, scope) DO UPDATE SET color = EXCLUDED.color RETURNING id::TEXT, name, color, scope;",
+                                         "query":  "INSERT INTO tags (name, color, scope) VALUES (\u0027{{ $json.body.name }}\u0027, \u0027{{ $json.body.color }}\u0027, \u0027{{ $json.body.scope || 'global' }}\u0027) ON CONFLICT (name, scope) DO UPDATE SET color = EXCLUDED.color RETURNING id::TEXT, name, color, scope;",
                                          "operation":  "executeQuery",
                                          "options":  {
 
@@ -562,10 +569,17 @@
                       "id":  "res-create-tag",
                       "name":  "RES: Create Tag",
                       "parameters":  {
-                                         "responseBody":  "={{ $json }}",
+                                         "responseBody":  "={{ JSON.stringify($json) }}",
                                          "respondWith":  "json",
                                          "options":  {
-
+                                                         "responseHeaders":  {
+                                                                                 "entries":  [
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Origin",
+                                                                                                     "value":  "*"
+                                                                                                 }
+                                                                                             ]
+                                                                             }
                                                      }
                                      },
                       "type":  "n8n-nodes-base.respondToWebhook",
@@ -620,10 +634,17 @@
                       "id":  "res-delete-tag",
                       "name":  "RES: Delete Tag",
                       "parameters":  {
-                                         "responseBody":  "={{ {\"success\": true} }}",
+                                         "responseBody":  "={{ JSON.stringify({success: true}) }}",
                                          "respondWith":  "json",
                                          "options":  {
-
+                                                         "responseHeaders":  {
+                                                                                 "entries":  [
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Origin",
+                                                                                                     "value":  "*"
+                                                                                                 }
+                                                                                             ]
+                                                                             }
                                                      }
                                      },
                       "type":  "n8n-nodes-base.respondToWebhook",
