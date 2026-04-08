@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Conversation } from '@/types';
+import { Conversation, Tag as TagType } from '@/types';
 import { useChatStore } from '@/store/useChatStore';
 import { messagesAPI } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
@@ -23,6 +23,7 @@ import {
   Paperclip,
   Receipt,
   X,
+  ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { mockQuickMessages } from '@/lib/mockData';
@@ -38,8 +39,38 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [showQuickMessages, setShowQuickMessages] = useState(false);
   const [showCustomerPanel, setShowCustomerPanel] = useState(true);
+  const [showTagDropdown, setShowTagDropdown] = useState(false);
+  const [availableTags, setAvailableTags] = useState<TagType[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const tagDropdownRef = useRef<HTMLDivElement>(null);
   const { sendMessage, setConversationLabels, updateConversationStatus, addMessageToConversation } = useChatStore();
+
+  const N8N_URL = process.env.NEXT_PUBLIC_N8N_URL || 'http://localhost:5678/webhook';
+
+  // Fetch available tags from DB
+  useEffect(() => {
+    const fetchTags = async () => {
+      try {
+        const res = await fetch(`${N8N_URL}/admin/tags`);
+        const data = await res.json();
+        setAvailableTags(Array.isArray(data) ? data : data.tags || []);
+      } catch (e) {
+        console.error('Failed to fetch tags:', e);
+      }
+    };
+    fetchTags();
+  }, []);
+
+  // Close tag dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (tagDropdownRef.current && !tagDropdownRef.current.contains(e.target as Node)) {
+        setShowTagDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Realtime polling — fetch new messages every 5 seconds (silent, no flicker)
   const lastMessageCountRef = useRef(0);
@@ -74,7 +105,7 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
       }
     };
 
-    const interval = setInterval(pollMessages, 5000);
+    const interval = setInterval(pollMessages, 3000);
     return () => clearInterval(interval);
   }, [conversation?.id]); // Only depend on conversation ID, not message count
 
@@ -146,7 +177,7 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
 
   const handleAddTag = async () => {
     const nextName = tagInput.trim();
-    if (!nextName || conversation.channel !== 'line') return;
+    if (!nextName) return;
     if (conversation.labels.some((label) => label.name.toLowerCase() === nextName.toLowerCase())) {
       setTagInput('');
       return;
@@ -164,6 +195,21 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
     try {
       await setConversationLabels(conversation.id, nextLabels);
       setTagInput('');
+    } catch (error) {
+      console.error('Failed to add tag:', error);
+    }
+  };
+
+  const handleSelectTag = async (tag: TagType) => {
+    if (!conversation) return;
+    if (conversation.labels.some((l) => l.name.toLowerCase() === tag.name.toLowerCase())) {
+      setShowTagDropdown(false);
+      return;
+    }
+    const nextLabels = [...conversation.labels, { id: tag.id, name: tag.name, color: tag.color }];
+    try {
+      await setConversationLabels(conversation.id, nextLabels);
+      setShowTagDropdown(false);
     } catch (error) {
       console.error('Failed to add tag:', error);
     }
@@ -190,8 +236,12 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
                 <ChevronRight className="h-5 w-5 rotate-180" />
               </button>
             )}
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-sm font-semibold text-gray-600 flex-shrink-0">
-              {conversation.customerName.charAt(0)}
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-sm font-semibold text-gray-600 flex-shrink-0 overflow-hidden">
+              {conversation.customerAvatar ? (
+                <img src={conversation.customerAvatar} alt={conversation.customerName} className="w-full h-full object-cover" />
+              ) : (
+                conversation.customerName.charAt(0)
+              )}
             </div>
             <div className="min-w-0">
               <h2 className="text-sm font-semibold truncate">{conversation.customerName}</h2>
@@ -247,7 +297,7 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
             </div>
           ) : (
             conversation.messages.map((message) => (
-              <ChatBubble key={message.id} message={message} customerName={conversation.customerName} />
+              <ChatBubble key={message.id} message={message} customerName={conversation.customerName} customerAvatar={conversation.customerAvatar} />
             ))
           )}
         </div>
@@ -338,8 +388,12 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
         <div className="hidden lg:flex w-72 border-l border-border bg-white flex-col overflow-y-auto scrollbar-thin animate-slide-in-left">
           {/* Customer Header */}
           <div className="p-4 border-b border-border text-center">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-xl font-semibold text-gray-600 mx-auto mb-3">
-              {conversation.customerName.charAt(0)}
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-xl font-semibold text-gray-600 mx-auto mb-3 overflow-hidden">
+              {conversation.customerAvatar ? (
+                <img src={conversation.customerAvatar} alt={conversation.customerName} className="w-full h-full object-cover" />
+              ) : (
+                conversation.customerName.charAt(0)
+              )}
             </div>
             <h3 className="font-semibold text-sm">{conversation.customerName}</h3>
             <p className="text-xs text-muted-foreground">{conversation.customerEmail}</p>
@@ -372,32 +426,68 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 ป้ายกำกับ
               </h4>
-              <span className="text-[10px] text-muted-foreground">LINE</span>
             </div>
-            {conversation.channel === 'line' && (
-              <div className="flex gap-1.5 mb-2">
-                <Input
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddTag();
-                    }
-                  }}
-                  placeholder="เพิ่มแท็ก เช่น VIP"
-                  className="h-8 text-xs"
-                />
-                <Button size="sm" variant="outline" className="h-8 px-2" onClick={handleAddTag}>
-                  <PlusCircle className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            )}
+            {/* Tag selector dropdown */}
+            <div className="relative mb-2" ref={tagDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setShowTagDropdown(!showTagDropdown)}
+                className="w-full flex items-center justify-between h-8 px-2.5 text-xs border border-border rounded-md bg-white hover:bg-muted/30 transition-colors"
+              >
+                <span className="text-muted-foreground">เลือกแท็ก...</span>
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+              {showTagDropdown && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-border rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                  {availableTags.length === 0 ? (
+                    <div className="p-3 text-xs text-muted-foreground text-center">
+                      ยังไม่มีแท็ก — ไปเพิ่มที่หน้า &quot;จัดการแท็ก&quot;
+                    </div>
+                  ) : (
+                    availableTags
+                      .filter((t) => !conversation.labels.some((l) => l.name.toLowerCase() === t.name.toLowerCase()))
+                      .map((tag) => (
+                        <button
+                          key={tag.id}
+                          type="button"
+                          onClick={() => handleSelectTag(tag)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted/50 transition-colors text-left"
+                        >
+                          <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
+                          <span>{tag.name}</span>
+                        </button>
+                      ))
+                  )}
+                  {/* Custom tag input */}
+                  <div className="border-t border-border flex gap-1 p-1.5">
+                    <Input
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddTag();
+                          setShowTagDropdown(false);
+                        }
+                      }}
+                      placeholder="พิมพ์ชื่อแท็กใหม่..."
+                      className="h-7 text-xs flex-1"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2"
+                      onClick={() => { handleAddTag(); setShowTagDropdown(false); }}
+                    >
+                      <PlusCircle className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {conversation.labels.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  {conversation.channel === 'line' ? 'ยังไม่มีป้ายกำกับ' : 'รองรับเฉพาะ LINE'}
-                </p>
+                <p className="text-xs text-muted-foreground">ยังไม่มีป้ายกำกับ</p>
               ) : (
                 conversation.labels.map((label) => (
                   <span
@@ -406,37 +496,16 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
                     style={{ backgroundColor: label.color }}
                   >
                     {label.name}
-                    {conversation.channel === 'line' && (
-                      <button
-                        type="button"
-                        className="opacity-80 hover:opacity-100"
-                        onClick={() => handleRemoveTag(label.id)}
-                        aria-label={`remove-${label.name}`}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="opacity-80 hover:opacity-100"
+                      onClick={() => handleRemoveTag(label.id)}
+                      aria-label={`remove-${label.name}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
                   </span>
                 ))
-              )}
-            </div>
-          </div>
-
-          {/* Context */}
-          <div className="p-4 border-b border-border">
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-              บริบทสนทนา (Context)
-            </h4>
-            <div className="space-y-1">
-              {conversation.status !== 'resolved' && (
-                <div className="text-xs px-2 py-1 bg-orange-50 text-orange-700 rounded">
-                  open-conversation
-                </div>
-              )}
-              {conversation.summary && (
-                <div className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded">
-                  {conversation.summary}
-                </div>
               )}
             </div>
           </div>

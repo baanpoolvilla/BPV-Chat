@@ -73,7 +73,7 @@ export function ConversationList() {
   useEffect(() => {
     const interval = setInterval(() => {
       fetchConversations(true); // silent mode — no loading spinner
-    }, 10000);
+    }, 5000);
     return () => clearInterval(interval);
   }, [conversationFilter, searchQuery]);
 
@@ -241,8 +241,12 @@ export function ConversationList() {
                 <div className="flex items-start gap-3">
                   {/* Avatar */}
                   <div className="relative flex-shrink-0">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-sm font-semibold text-gray-600">
-                      {conversation.customerName.charAt(0)}
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-sm font-semibold text-gray-600 overflow-hidden">
+                      {conversation.customerAvatar ? (
+                        <img src={conversation.customerAvatar} alt={conversation.customerName} className="w-full h-full object-cover" />
+                      ) : (
+                        conversation.customerName.charAt(0)
+                      )}
                     </div>
                     {/* Channel indicator */}
                     <div className="absolute -bottom-0.5 -right-0.5 w-4.5 h-4.5">

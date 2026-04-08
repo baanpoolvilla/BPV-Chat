@@ -12,6 +12,7 @@ import {
   LogOut,
   X,
   Settings,
+  Tag,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -107,6 +108,12 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
       label: 'รวมแชท',
       icon: MessagesSquare,
       highlight: true,
+    },
+    {
+      id: 'tags',
+      href: '/tags',
+      label: 'จัดการแท็ก',
+      icon: Tag,
     },
     {
       id: 'settings',

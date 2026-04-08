@@ -9,9 +9,10 @@ import { Bot, UserCheck } from 'lucide-react';
 interface ChatBubbleProps {
   message: Message;
   customerName?: string;
+  customerAvatar?: string;
 }
 
-export function ChatBubble({ message, customerName }: ChatBubbleProps) {
+export function ChatBubble({ message, customerName, customerAvatar }: ChatBubbleProps) {
   const isUser = message.senderType === 'customer';
   const isBot = message.senderType === 'bot';
   const isAdmin = message.senderType === 'admin';
@@ -34,8 +35,12 @@ export function ChatBubble({ message, customerName }: ChatBubbleProps) {
     >
       {/* Avatar */}
       {isLeft && (
-        <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 mt-5 text-xs font-semibold text-gray-600">
-          {(customerName || message.sender.name).charAt(0)}
+        <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 mt-5 text-xs font-semibold text-gray-600 overflow-hidden">
+          {customerAvatar ? (
+            <img src={customerAvatar} alt={customerName || ''} className="w-full h-full object-cover" />
+          ) : (
+            (customerName || message.sender.name).charAt(0)
+          )}
         </div>
       )}
       {isRight && (
