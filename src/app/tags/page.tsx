@@ -97,7 +97,7 @@ function TagsContent() {
   const handleAddTag = async () => {
     const name = newTagName.trim();
     if (!name) return;
-    if (tags.some((t) => t.name.toLowerCase() === name.toLowerCase())) return;
+    if (tags.some((t) => t.name.toLowerCase() === name.toLowerCase() && t.scope === newTagCategory)) return;
 
     setSaving(true);
     try {

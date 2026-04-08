@@ -65,7 +65,7 @@
       "position": [0, 200],
       "parameters": {
         "httpMethod": "GET",
-        "path": "admin/messages",
+        "path": "admin/messages/:conversationId",
         "responseMode": "responseNode",
         "options": {}
       }
@@ -92,7 +92,7 @@
       },
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT\n  m.id::TEXT                                           AS id,\n  m.conversation_id::TEXT                              AS conversation_id,\n  m.sender_type,\n  m.direction,\n  m.message_type,\n  COALESCE(m.content_text, '')                         AS content_text,\n  m.created_at,\n  u.id::TEXT                                           AS sender_user_id,\n  COALESCE(u.display_name, u.external_user_id, m.sender_type) AS sender_name,\n  u.picture_url                                        AS sender_avatar\nFROM  messages m\nLEFT  JOIN users u ON m.sender_user_id = u.id\nWHERE m.conversation_id = '{{ $json.conversationId }}'::UUID\n  AND m.is_deleted = FALSE\nORDER BY m.created_at ASC\nLIMIT 200;",
+        "query": "SELECT\n  m.id::TEXT                                           AS id,\n  m.conversation_id::TEXT                              AS conversation_id,\n  m.sender_type,\n  m.direction,\n  m.message_type,\n  COALESCE(m.content_text, '')                         AS content_text,\n  m.created_at,\n  u.id::TEXT                                           AS sender_user_id,\n  COALESCE(u.display_name, u.external_user_id, m.sender_type) AS sender_name,\n  u.picture_url                                        AS sender_avatar\nFROM  messages m\nLEFT  JOIN users u ON m.sender_user_id = u.id\nWHERE m.conversation_id = '{{ $json.params.conversationId }}'::UUID\n  AND m.is_deleted = FALSE\nORDER BY m.created_at ASC\nLIMIT 200;",
         "options": {}
       }
     },
@@ -506,9 +506,6 @@
       "main": [[{ "node": "RES: Get Conversations", "type": "main", "index": 0 }]]
     },
     "WH: Get Messages": {
-      "main": [[{ "node": "Parse: Msg Params", "type": "main", "index": 0 }]]
-    },
-    "Parse: Msg Params": {
       "main": [[{ "node": "PG: Get Messages", "type": "main", "index": 0 }]]
     },
     "PG: Get Messages": {

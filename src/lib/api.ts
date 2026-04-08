@@ -214,8 +214,8 @@ export const messagesAPI = {
       return getMockConversationById(conversationId)?.messages || [];
     }
 
-    // N8N webhook: GET /admin/messages?conversationId=xxx
-    const response = await n8nClient.get('/admin/messages', { params: { conversationId: conversationId } });
+    // N8N webhook: GET /admin/messages/:conversationId
+    const response = await n8nClient.get(`/admin/messages/${conversationId}`);
     // N8N returns { messages: [...], total: N } — extract array
     const data = response.data;
     return Array.isArray(data) ? data : (data.messages || []);
