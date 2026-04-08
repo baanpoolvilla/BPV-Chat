@@ -434,8 +434,8 @@
       "typeVersion": 2,
       "position": [0, 1800],
       "parameters": {
-        "httpMethod": "DELETE",
-        "path": "admin/tags/:tagId",
+        "httpMethod": "POST",
+        "path": "admin/tags/delete",
         "responseMode": "responseNode",
         "options": {}
       }
@@ -451,7 +451,7 @@
       },
       "parameters": {
         "operation": "executeQuery",
-        "query": "DELETE FROM conversation_tags WHERE tag_id = '{{ $json.params.tagId }}'::UUID; DELETE FROM tags WHERE id = '{{ $json.params.tagId }}'::UUID RETURNING id::TEXT;",
+        "query": "DELETE FROM conversation_tags WHERE tag_id = '{{ $json.body.tagId }}'::UUID; DELETE FROM tags WHERE id = '{{ $json.body.tagId }}'::UUID RETURNING id::TEXT;",
         "options": {}
       }
     },

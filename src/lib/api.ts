@@ -353,7 +353,7 @@ export const tagsAPI = {
 
   delete: async (tagId: string): Promise<void> => {
     if (MOCK_MODE) { await delay(200); return; }
-    await n8nClient.delete(`/admin/tags/${tagId}`);
+    await n8nClient.post('/admin/tags/delete', { tagId });
   },
 };
 

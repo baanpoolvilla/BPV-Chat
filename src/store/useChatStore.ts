@@ -283,6 +283,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   sendMessage: async (conversationId: string, content: string) => {
     try {
       // Optimistic update — แสดงข้อความทันทีก่อน API ตอบกลับ
+      const currentUser = get().user;
+      const adminName = currentUser?.name || 'Admin';
       const tempMessage: Message = {
         id: 'temp_' + Date.now(),
         conversationId,
@@ -292,7 +294,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         messageType: 'text',
         contentText: content,
         content,
-        sender: { id: 'admin', name: 'Admin', type: 'admin' },
+        sender: { id: currentUser?.id || 'admin', name: adminName, type: 'admin' },
         timestamp: new Date().toISOString(),
         isRead: true,
       };
