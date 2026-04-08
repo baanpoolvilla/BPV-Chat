@@ -1,0 +1,62 @@
+{
+  "name": "Messages API",
+  "nodes": [
+    {
+      "id": "wh-msgs",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "admin/messages",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "pg-msgs",
+      "name": "Postgres",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [300, 0],
+      "credentials": {
+        "postgres": { "id": "n5ShY9BluRF19UVO", "name": "Postgres account" }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  COALESCE(\n    (SELECT json_agg(\n      json_build_object(\n        'id', m.id::TEXT,\n        'conversationId', m.conversation_id::TEXT,\n        'senderType', m.sender_type,\n        'type', m.sender_type,\n        'direction', m.direction,\n        'messageType', m.message_type,\n        'content', COALESCE(m.content_text, ''),\n        'contentText', COALESCE(m.content_text, ''),\n        'sender', json_build_object(\n          'id', COALESCE(u.id::TEXT, m.sender_type),\n          'name', COALESCE(u.display_name, u.external_user_id, m.sender_type),\n          'type', m.sender_type,\n          'avatar', u.picture_url\n        ),\n        'timestamp', m.created_at,\n        'isRead', true\n      ) ORDER BY m.created_at ASC\n    )\n    FROM messages m\n    LEFT JOIN users u ON m.sender_user_id = u.id\n    WHERE m.conversation_id = '{{ $json.query.conversationId }}'::UUID\n      AND m.is_deleted = FALSE\n    ), '[]'::json\n  ) AS messages,\n  (SELECT COUNT(*)::INT FROM messages\n   WHERE conversation_id = '{{ $json.query.conversationId }}'::UUID\n     AND is_deleted = FALSE) AS total;",
+        "options": {}
+      }
+    },
+    {
+      "id": "res-msgs",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [600, 0],
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "*" },
+              { "name": "Content-Type", "value": "application/json" }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Postgres", "type": "main", "index": 0 }]]
+    },
+    "Postgres": {
+      "main": [[{ "node": "Respond", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
