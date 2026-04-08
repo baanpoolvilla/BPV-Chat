@@ -75,6 +75,26 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
     lastMessageCountRef.current = conversation.messages?.length || 0;
   }, [conversation?.id]);
 
+  // Initial message load — ดึงข้อความเมื่อเลือกบทสนทนา
+  useEffect(() => {
+    if (!conversation) return;
+    const convId = conversation.id;
+    const loadMessages = async () => {
+      try {
+        const messages = await messagesAPI.getByConversation(convId);
+        if (messages.length > 0) {
+          const store = useChatStore.getState();
+          const existingConv = store.conversations.find((c) => c.id === convId);
+          const existingIds = new Set((existingConv?.messages || []).filter((m) => !m.id.startsWith('temp_')).map((m) => m.id));
+          const newMsgs = messages.filter((m) => !existingIds.has(m.id));
+          newMsgs.forEach((msg) => addMessageToConversation(convId, msg));
+          scrollToBottom();
+        }
+      } catch (e) { /* will retry via poll */ }
+    };
+    loadMessages();
+  }, [conversation?.id]);
+
   useEffect(() => {
     if (!conversation) return;
     const convId = conversation.id;

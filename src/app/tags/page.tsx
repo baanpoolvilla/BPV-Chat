@@ -5,7 +5,7 @@ import { ProtectedLayout } from '@/components/layout/ProtectedLayout';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { Tag, Plus, Trash2, Loader, FolderOpen } from 'lucide-react';
+import { Tag, Plus, Trash2, Loader, FolderOpen, Edit2, X } from 'lucide-react';
 import { tagsAPI } from '@/lib/api';
 
 interface TagItem {
@@ -21,16 +21,23 @@ const PRESET_COLORS = [
   '#0d9488', '#c026d3', '#65a30d', '#e11d48', '#0284c7',
 ];
 
-// DB ENUM keys → Thai display labels
-const SCOPE_LABELS: Record<string, string> = {
+// Default scope labels
+const DEFAULT_SCOPES: Record<string, string> = {
   global: 'ทั่วไป',
   customer: 'ลูกค้า',
   conversation: 'บทสนทนา',
 };
 
-const SCOPE_KEYS = Object.keys(SCOPE_LABELS); // ['global', 'customer', 'conversation']
+const loadCustomScopes = (): Record<string, string> => {
+  if (typeof window === 'undefined') return {};
+  try {
+    return JSON.parse(localStorage.getItem('custom_scopes') || '{}');
+  } catch { return {}; }
+};
 
-const scopeLabel = (key: string) => SCOPE_LABELS[key] || key;
+const saveCustomScopes = (scopes: Record<string, string>) => {
+  localStorage.setItem('custom_scopes', JSON.stringify(scopes));
+};
 
 function TagsContent() {
   const [tags, setTags] = useState<TagItem[]>([]);
@@ -41,6 +48,18 @@ function TagsContent() {
   const [hexInput, setHexInput] = useState(PRESET_COLORS[0]);
   const [saving, setSaving] = useState(false);
   const [filterCategory, setFilterCategory] = useState('all');
+  const [customScopes, setCustomScopes] = useState<Record<string, string>>({});
+  const [showCategoryEditor, setShowCategoryEditor] = useState(false);
+  const [newCategoryKey, setNewCategoryKey] = useState('');
+
+  // All scopes = default + custom
+  const allScopes = { ...DEFAULT_SCOPES, ...customScopes };
+  const allScopeKeys = Object.keys(allScopes);
+  const scopeLabel = (key: string) => allScopes[key] || key;
+
+  useEffect(() => {
+    setCustomScopes(loadCustomScopes());
+  }, []);
 
   const fetchTags = async () => {
     try {
@@ -111,10 +130,31 @@ function TagsContent() {
     ? tags
     : tags.filter((t) => t.scope === filterCategory);
 
-  const categoryTagCounts = SCOPE_KEYS.reduce((acc, cat) => {
+  const categoryTagCounts = allScopeKeys.reduce((acc, cat) => {
     acc[cat] = tags.filter((t) => (t.scope || 'global') === cat).length;
     return acc;
   }, {} as Record<string, number>);
+
+  const handleAddCategory = () => {
+    const name = newCategoryKey.trim();
+    if (!name) return;
+    // Use lowercase key
+    const key = name.toLowerCase().replace(/\s+/g, '_');
+    if (allScopes[key]) return; // already exists
+    const updated = { ...customScopes, [key]: name };
+    setCustomScopes(updated);
+    saveCustomScopes(updated);
+    setNewCategoryKey('');
+  };
+
+  const handleDeleteCategory = (key: string) => {
+    if (DEFAULT_SCOPES[key]) return; // can't delete default
+    const updated = { ...customScopes };
+    delete updated[key];
+    setCustomScopes(updated);
+    saveCustomScopes(updated);
+    if (filterCategory === key) setFilterCategory('all');
+  };
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
@@ -152,7 +192,7 @@ function TagsContent() {
                 onChange={(e) => setNewTagCategory(e.target.value)}
                 className="w-full h-10 rounded-md border border-border bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
               >
-                {SCOPE_KEYS.map((key) => (
+                {allScopeKeys.map((key) => (
                   <option key={key} value={key}>{scopeLabel(key)}</option>
                 ))}
               </select>
@@ -217,26 +257,93 @@ function TagsContent() {
       </Card>
 
       {/* Filter by category */}
-      <div className="flex gap-2 flex-wrap">
-        <button
-          onClick={() => setFilterCategory('all')}
-          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-            filterCategory === 'all' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'
-          }`}
-        >
-          ทั้งหมด ({tags.length})
-        </button>
-        {SCOPE_KEYS.map((key) => (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setFilterCategory('all')}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                filterCategory === 'all' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+            >
+              ทั้งหมด ({tags.length})
+            </button>
+            {allScopeKeys.map((key) => (
+              <button
+                key={key}
+                onClick={() => setFilterCategory(key)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  filterCategory === key ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                }`}
+              >
+                {scopeLabel(key)} ({categoryTagCounts[key] || 0})
+              </button>
+            ))}
+          </div>
           <button
-            key={key}
-            onClick={() => setFilterCategory(key)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-              filterCategory === key ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            onClick={() => setShowCategoryEditor(!showCategoryEditor)}
+            className={`p-1.5 rounded-lg transition-colors ${
+              showCategoryEditor ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
             }`}
+            title="จัดการหมวดหมู่"
           >
-            {scopeLabel(key)} ({categoryTagCounts[key] || 0})
+            <Edit2 className="h-4 w-4" />
           </button>
-        ))}
+        </div>
+
+        {showCategoryEditor && (
+          <Card className="p-4 border-dashed">
+            <h3 className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+              <FolderOpen className="h-3.5 w-3.5" />
+              จัดการหมวดหมู่
+            </h3>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {allScopeKeys.map((key) => {
+                const isDefault = !!DEFAULT_SCOPES[key];
+                const usedCount = tags.filter((t) => t.scope === key).length;
+                return (
+                  <span
+                    key={key}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground"
+                  >
+                    {scopeLabel(key)}
+                    {usedCount > 0 && (
+                      <span className="text-[10px] text-muted-foreground/60">({usedCount})</span>
+                    )}
+                    {!isDefault && usedCount === 0 && (
+                      <button
+                        onClick={() => handleDeleteCategory(key)}
+                        className="hover:text-red-500 transition-colors"
+                        title="ลบหมวดหมู่"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                value={newCategoryKey}
+                onChange={(e) => setNewCategoryKey(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddCategory(); }}}
+                placeholder="ชื่อหมวดหมู่ใหม่..."
+                className="h-8 text-xs flex-1"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 px-3 gap-1 text-xs"
+                onClick={handleAddCategory}
+                disabled={!newCategoryKey.trim()}
+              >
+                <Plus className="h-3 w-3" />
+                เพิ่ม
+              </Button>
+            </div>
+          </Card>
+        )}
       </div>
 
       {/* Tags List */}
