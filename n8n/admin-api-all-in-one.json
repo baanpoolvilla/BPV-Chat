@@ -77,7 +77,7 @@
       "typeVersion": 2,
       "position": [200, 200],
       "parameters": {
-        "jsCode": "const body = $json.body || {};\nconst conversationId = body.conversationId || '';\nreturn [{ json: { conversationId } }];"
+        "jsCode": "const input = $input.first().json;\nconst body = input.body || {};\nconst conversationId = body.conversationId || '';\nreturn [{ json: { conversationId } }];"
       }
     },
     {
@@ -223,7 +223,7 @@
       "typeVersion": 2,
       "position": [240, 600],
       "parameters": {
-        "jsCode": "const body   = $json.body   || {};\nconst conversationId = body.conversationId || '';\nconst tags = Array.isArray(body.tags) ? body.tags : [];\nconst cleaned = tags\n  .map((tag) => ({\n    name:  String(tag.name  || '').trim(),\n    color: String(tag.color || '#2563eb').trim(),\n  }))\n  .filter((tag) => tag.name.length > 0);\nreturn [{ json: { conversationId, tags: cleaned } }];"
+        "jsCode": "const input = $input.first().json;\nconst body   = input.body   || {};\nconst conversationId = body.conversationId || '';\nconst tags = Array.isArray(body.tags) ? body.tags : [];\nconst cleaned = tags\n  .map((tag) => ({\n    name:  String(tag.name  || '').trim(),\n    color: String(tag.color || '#2563eb').trim(),\n  }))\n  .filter((tag) => tag.name.length > 0);\nreturn [{ json: { conversationId, tags: cleaned } }];"
       }
     },
     {
@@ -401,7 +401,7 @@
       "typeVersion": 2,
       "position": [200, 1200],
       "parameters": {
-        "jsCode": "const body = $json.body || {};\nreturn [{ json: {\n  name:  String(body.name  || '').trim(),\n  color: String(body.color || '#2563eb').trim(),\n  scope: String(body.scope || 'global').trim(),\n} }];"
+        "jsCode": "const input = $input.first().json;\nconst body = input.body || {};\nreturn [{ json: {\n  name:  String(body.name  || '').trim(),\n  color: String(body.color || '#2563eb').trim(),\n  scope: String(body.scope || 'global').trim(),\n} }];"
       }
     },
     {
