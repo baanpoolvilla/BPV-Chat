@@ -71,18 +71,27 @@
       }
     },
     {
+      "id": "code-parse-msg-body",
+      "name": "Parse: Msg Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [200, 200],
+      "parameters": {
+        "jsCode": "const body = $json.body || {};\nconst conversationId = body.conversationId || '';\nreturn [{ json: { conversationId } }];"
+      }
+    },
+    {
       "id": "pg-get-msgs",
       "name": "PG: Get Messages",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [360, 200],
-      "onError": "continueRegularOutput",
+      "position": [400, 200],
       "credentials": {
         "postgres": { "id": "n5ShY9BluRF19UVO", "name": "Postgres account" }
       },
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT\n  m.id::TEXT                                           AS id,\n  m.conversation_id::TEXT                              AS conversation_id,\n  m.sender_type,\n  m.direction,\n  m.message_type,\n  COALESCE(m.content_text, '')                         AS content_text,\n  m.created_at,\n  u.id::TEXT                                           AS sender_user_id,\n  COALESCE(u.display_name, u.external_user_id, m.sender_type) AS sender_name,\n  u.picture_url                                        AS sender_avatar\nFROM  messages m\nLEFT  JOIN users u ON m.sender_user_id = u.id\nWHERE m.conversation_id = '{{ $json.body.conversationId }}'::UUID\n  AND m.is_deleted = FALSE\nORDER BY m.created_at ASC\nLIMIT 200;",
+        "query": "SELECT\n  m.id::TEXT           AS id,\n  m.conversation_id::TEXT AS conversation_id,\n  m.sender_type,\n  m.direction,\n  m.message_type,\n  COALESCE(m.content_text, '') AS content_text,\n  m.created_at,\n  u.id::TEXT           AS sender_user_id,\n  COALESCE(u.display_name, u.external_user_id, m.sender_type) AS sender_name,\n  u.picture_url        AS sender_avatar\nFROM messages m\nLEFT JOIN users u ON m.sender_user_id = u.id\nWHERE m.conversation_id = '{{ $json.conversationId }}'::UUID\n  AND m.is_deleted = FALSE\nORDER BY m.created_at ASC\nLIMIT 200;",
         "options": {}
       }
     },
@@ -91,7 +100,7 @@
       "name": "Format: Messages",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [540, 200],
+      "position": [600, 200],
       "parameters": {
         "jsCode": "const items = $input.all();\nconst messages = items\n  .filter(r => r.json.id)\n  .map(r => ({\n    id:          r.json.id,\n    conversationId: r.json.conversation_id,\n    senderType:  r.json.sender_type,\n    type:        r.json.sender_type,\n    direction:   r.json.direction,\n    messageType: r.json.message_type,\n    contentText: r.json.content_text,\n    content:     r.json.content_text || '',\n    sender: {\n      id:     r.json.sender_user_id || r.json.sender_type,\n      name:   r.json.sender_name    || r.json.sender_type,\n      type:   r.json.sender_type,\n      avatar: r.json.sender_avatar  || null,\n    },\n    timestamp: r.json.created_at,\n    isRead: true,\n  }));\nreturn [{ json: { messages, total: messages.length } }];"
       }
@@ -101,7 +110,7 @@
       "name": "RES: Get Messages",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [720, 200],
+      "position": [800, 200],
       "parameters": {
         "respondWith": "firstIncomingItem",
         "options": {
@@ -321,7 +330,7 @@
       "name": "WH: Get Tags",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [0, 1200],
+      "position": [0, 1000],
       "parameters": {
         "httpMethod": "GET",
         "path": "admin/tags",
@@ -334,7 +343,7 @@
       "name": "PG: Get Tags",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [240, 1200],
+      "position": [240, 1000],
       "credentials": {
         "postgres": { "id": "n5ShY9BluRF19UVO", "name": "Postgres account" }
       },
@@ -349,9 +358,9 @@
       "name": "Format: Tags List",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [480, 1200],
+      "position": [480, 1000],
       "parameters": {
-        "jsCode": "const rows = $input.all().map(i => i.json);\nreturn [{ json: { tags: rows, total: rows.length } }];"
+        "jsCode": "const rows = $input.all().map(i => i.json).filter(r => r.id);\nreturn [{ json: { tags: rows, total: rows.length } }];"
       }
     },
     {
@@ -359,7 +368,7 @@
       "name": "RES: Get Tags",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [720, 1200],
+      "position": [720, 1000],
       "parameters": {
         "respondWith": "firstIncomingItem",
         "options": {
@@ -377,7 +386,7 @@
       "name": "WH: Create Tag",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [0, 1500],
+      "position": [0, 1200],
       "parameters": {
         "httpMethod": "POST",
         "path": "admin/tags",
@@ -386,17 +395,27 @@
       }
     },
     {
+      "id": "code-parse-create-tag",
+      "name": "Parse: Tag Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [200, 1200],
+      "parameters": {
+        "jsCode": "const body = $json.body || {};\nreturn [{ json: {\n  name:  String(body.name  || '').trim(),\n  color: String(body.color || '#2563eb').trim(),\n  scope: String(body.scope || 'global').trim(),\n} }];"
+      }
+    },
+    {
       "id": "pg-create-tag",
       "name": "PG: Create Tag",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [240, 1500],
+      "position": [400, 1200],
       "credentials": {
         "postgres": { "id": "n5ShY9BluRF19UVO", "name": "Postgres account" }
       },
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO tags (name, color, scope) VALUES ('{{ $json.body.name }}', '{{ $json.body.color }}', '{{ $json.body.scope || 'global' }}') ON CONFLICT (name, scope) DO UPDATE SET color = EXCLUDED.color RETURNING id::TEXT, name, color, scope;",
+        "query": "CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_name_scope ON tags (name, scope);\nINSERT INTO tags (name, color, scope)\nVALUES ('{{ $json.name }}', '{{ $json.color }}', '{{ $json.scope }}')\nON CONFLICT (name, scope) DO UPDATE SET color = EXCLUDED.color\nRETURNING id::TEXT, name, color, scope;",
         "options": {}
       }
     },
@@ -405,9 +424,9 @@
       "name": "Format: Created Tag",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [480, 1500],
+      "position": [600, 1200],
       "parameters": {
-        "jsCode": "const row = $input.first().json;\nreturn [{ json: row }];"
+        "jsCode": "const items = $input.all().filter(i => i.json.id);\nconst row = items.length > 0 ? items[items.length - 1].json : $input.first().json;\nreturn [{ json: row }];"
       }
     },
     {
@@ -415,7 +434,7 @@
       "name": "RES: Create Tag",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [720, 1500],
+      "position": [800, 1200],
       "parameters": {
         "respondWith": "firstIncomingItem",
         "options": {
@@ -433,7 +452,7 @@
       "name": "WH: Delete Tag",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [0, 1800],
+      "position": [0, 1400],
       "parameters": {
         "httpMethod": "POST",
         "path": "admin/tags/delete",
@@ -446,13 +465,13 @@
       "name": "PG: Delete Tag",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [240, 1800],
+      "position": [240, 1400],
       "credentials": {
         "postgres": { "id": "n5ShY9BluRF19UVO", "name": "Postgres account" }
       },
       "parameters": {
         "operation": "executeQuery",
-        "query": "DELETE FROM conversation_tags WHERE tag_id = '{{ $json.body.tagId }}'::UUID; DELETE FROM tags WHERE id = '{{ $json.body.tagId }}'::UUID RETURNING id::TEXT;",
+        "query": "DELETE FROM conversation_tags WHERE tag_id = '{{ $json.body.tagId }}'::UUID;\nDELETE FROM tags WHERE id = '{{ $json.body.tagId }}'::UUID RETURNING id::TEXT;",
         "options": {}
       }
     },
@@ -461,7 +480,7 @@
       "name": "Format: Delete Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [480, 1800],
+      "position": [480, 1400],
       "parameters": {
         "jsCode": "return [{ json: { success: true } }];"
       }
@@ -471,7 +490,7 @@
       "name": "RES: Delete Tag",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [720, 1800],
+      "position": [720, 1400],
       "parameters": {
         "respondWith": "firstIncomingItem",
         "options": {
@@ -496,6 +515,9 @@
       "main": [[{ "node": "RES: Get Conversations", "type": "main", "index": 0 }]]
     },
     "WH: Get Messages": {
+      "main": [[{ "node": "Parse: Msg Body", "type": "main", "index": 0 }]]
+    },
+    "Parse: Msg Body": {
       "main": [[{ "node": "PG: Get Messages", "type": "main", "index": 0 }]]
     },
     "PG: Get Messages": {
@@ -547,6 +569,9 @@
       "main": [[{ "node": "RES: Get Tags", "type": "main", "index": 0 }]]
     },
     "WH: Create Tag": {
+      "main": [[{ "node": "Parse: Tag Body", "type": "main", "index": 0 }]]
+    },
+    "Parse: Tag Body": {
       "main": [[{ "node": "PG: Create Tag", "type": "main", "index": 0 }]]
     },
     "PG: Create Tag": {
