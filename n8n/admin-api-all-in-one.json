@@ -64,20 +64,10 @@
       "typeVersion": 2,
       "position": [0, 200],
       "parameters": {
-        "httpMethod": "POST",
-        "path": "admin/messages/get",
+        "httpMethod": "GET",
+        "path": "admin/messages",
         "responseMode": "responseNode",
         "options": {}
-      }
-    },
-    {
-      "id": "code-parse-msg-body",
-      "name": "Parse: Msg Body",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [200, 200],
-      "parameters": {
-        "jsCode": "const input = $input.first().json;\nconst body = input.body || {};\nconst conversationId = body.conversationId || '';\nreturn [{ json: { conversationId } }];"
       }
     },
     {
@@ -85,13 +75,13 @@
       "name": "PG: Get Messages",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [400, 200],
+      "position": [240, 200],
       "credentials": {
         "postgres": { "id": "n5ShY9BluRF19UVO", "name": "Postgres account" }
       },
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT\n  m.id::TEXT           AS id,\n  m.conversation_id::TEXT AS conversation_id,\n  m.sender_type,\n  m.direction,\n  m.message_type,\n  COALESCE(m.content_text, '') AS content_text,\n  m.created_at,\n  u.id::TEXT           AS sender_user_id,\n  COALESCE(u.display_name, u.external_user_id, m.sender_type) AS sender_name,\n  u.picture_url        AS sender_avatar\nFROM messages m\nLEFT JOIN users u ON m.sender_user_id = u.id\nWHERE m.conversation_id = '{{ $json.conversationId }}'::UUID\n  AND m.is_deleted = FALSE\nORDER BY m.created_at ASC\nLIMIT 200;",
+        "query": "SELECT\n  m.id::TEXT           AS id,\n  m.conversation_id::TEXT AS conversation_id,\n  m.sender_type,\n  m.direction,\n  m.message_type,\n  COALESCE(m.content_text, '') AS content_text,\n  m.created_at,\n  u.id::TEXT           AS sender_user_id,\n  COALESCE(u.display_name, u.external_user_id, m.sender_type) AS sender_name,\n  u.picture_url        AS sender_avatar\nFROM messages m\nLEFT JOIN users u ON m.sender_user_id = u.id\nWHERE m.conversation_id = '{{ $json.query.conversationId }}'::UUID\n  AND m.is_deleted = FALSE\nORDER BY m.created_at ASC\nLIMIT 200;",
         "options": {}
       }
     },
@@ -100,7 +90,7 @@
       "name": "Format: Messages",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [600, 200],
+      "position": [480, 200],
       "parameters": {
         "jsCode": "const items = $input.all();\nconst messages = items\n  .filter(r => r.json.id)\n  .map(r => ({\n    id:          r.json.id,\n    conversationId: r.json.conversation_id,\n    senderType:  r.json.sender_type,\n    type:        r.json.sender_type,\n    direction:   r.json.direction,\n    messageType: r.json.message_type,\n    contentText: r.json.content_text,\n    content:     r.json.content_text || '',\n    sender: {\n      id:     r.json.sender_user_id || r.json.sender_type,\n      name:   r.json.sender_name    || r.json.sender_type,\n      type:   r.json.sender_type,\n      avatar: r.json.sender_avatar  || null,\n    },\n    timestamp: r.json.created_at,\n    isRead: true,\n  }));\nreturn [{ json: { messages, total: messages.length } }];"
       }
@@ -110,7 +100,7 @@
       "name": "RES: Get Messages",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [800, 200],
+      "position": [720, 200],
       "parameters": {
         "respondWith": "firstIncomingItem",
         "options": {
@@ -515,9 +505,6 @@
       "main": [[{ "node": "RES: Get Conversations", "type": "main", "index": 0 }]]
     },
     "WH: Get Messages": {
-      "main": [[{ "node": "Parse: Msg Body", "type": "main", "index": 0 }]]
-    },
-    "Parse: Msg Body": {
       "main": [[{ "node": "PG: Get Messages", "type": "main", "index": 0 }]]
     },
     "PG: Get Messages": {
