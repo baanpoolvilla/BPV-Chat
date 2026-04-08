@@ -25,7 +25,7 @@
       },
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT\n  c.id::TEXT AS id,\n  c.channel,\n  c.status,\n  c.last_message_at,\n  c.created_at,\n  c.updated_at,\n  c.bot_enabled,\n  u.id::TEXT AS customer_user_id,\n  u.external_user_id,\n  u.display_name,\n  u.picture_url,\n  u.phone,\n  u.email,\n  COALESCE((SELECT m.content_text FROM messages m WHERE m.conversation_id = c.id AND m.is_deleted = FALSE ORDER BY m.created_at DESC LIMIT 1), '') AS last_message,\n  COALESCE((SELECT json_agg(json_build_object('id', t.id::TEXT, 'name', t.name, 'color', t.color, 'scope', t.scope) ORDER BY t.name) FROM conversation_tags ct JOIN tags t ON ct.tag_id = t.id WHERE ct.conversation_id = c.id), '[]'::json) AS labels,\n  (SELECT COUNT(*)::INT FROM messages m WHERE m.conversation_id = c.id AND m.direction = 'inbound' AND m.is_deleted = FALSE AND NOT EXISTS (SELECT 1 FROM message_read_receipts r WHERE r.message_id = m.id)) AS unread_count,\n  COALESCE((SELECT json_agg(json_build_object('id', m.id::TEXT, 'conversationId', m.conversation_id::TEXT, 'senderType', m.sender_type, 'type', m.sender_type, 'direction', m.direction, 'messageType', m.message_type, 'content', COALESCE(m.content_text, ''), 'contentText', COALESCE(m.content_text, ''), 'sender', json_build_object('id', COALESCE(su.id::TEXT, m.sender_type), 'name', COALESCE(su.display_name, su.external_user_id, m.sender_type), 'type', m.sender_type, 'avatar', su.picture_url), 'timestamp', m.created_at, 'isRead', true) ORDER BY m.created_at ASC) FROM messages m LEFT JOIN users su ON m.sender_user_id = su.id WHERE m.conversation_id = c.id AND m.is_deleted = FALSE), '[]'::json) AS messages\nFROM conversations c\nJOIN users u ON c.customer_user_id = u.id\nWHERE c.status != 'archived'\nORDER BY c.last_message_at DESC NULLS LAST\nLIMIT 50;",
+        "query": "SELECT\n  c.id::TEXT AS id,\n  c.channel,\n  c.status,\n  c.last_message_at,\n  c.created_at,\n  c.updated_at,\n  c.bot_enabled,\n  u.id::TEXT AS customer_user_id,\n  u.external_user_id,\n  u.display_name,\n  u.picture_url,\n  u.phone,\n  u.email,\n  COALESCE((SELECT m.content_text FROM messages m WHERE m.conversation_id = c.id AND m.is_deleted = FALSE ORDER BY m.created_at DESC LIMIT 1), '') AS last_message,\n  COALESCE((SELECT json_agg(json_build_object('id', t.id::TEXT, 'name', t.name, 'color', t.color, 'scope', t.scope) ORDER BY t.name) FROM conversation_tags ct JOIN tags t ON ct.tag_id = t.id WHERE ct.conversation_id = c.id), '[]'::json) AS labels,\n  (SELECT COUNT(*)::INT FROM messages m WHERE m.conversation_id = c.id AND m.direction = 'inbound' AND m.is_deleted = FALSE AND NOT EXISTS (SELECT 1 FROM message_read_receipts r WHERE r.message_id = m.id)) AS unread_count\nFROM conversations c\nJOIN users u ON c.customer_user_id = u.id\nWHERE c.status != 'archived'\nORDER BY c.last_message_at DESC NULLS LAST\nLIMIT 50;",
         "options": {}
       }
     },
@@ -36,7 +36,7 @@
       "typeVersion": 2,
       "position": [480, 0],
       "parameters": {
-        "jsCode": "const rows = $input.all();\nconst conversations = rows.map((r) => {\n  const labels = Array.isArray(r.json.labels) ? r.json.labels : typeof r.json.labels === 'string' ? JSON.parse(r.json.labels || '[]') : [];\n  const messages = Array.isArray(r.json.messages) ? r.json.messages : typeof r.json.messages === 'string' ? JSON.parse(r.json.messages || '[]') : [];\n  return {\n    id: r.json.id,\n    customerUserId: r.json.customer_user_id,\n    customerExternalId: r.json.external_user_id,\n    customerName: r.json.display_name || r.json.external_user_id || r.json.id,\n    customerAvatar: r.json.picture_url || null,\n    customerEmail: r.json.email || '',\n    customerPhone: r.json.phone || '',\n    channel: r.json.channel,\n    status: r.json.status,\n    lastMessage: r.json.last_message || '',\n    lastMessageAt: r.json.last_message_at,\n    unreadCount: parseInt(r.json.unread_count) || 0,\n    labels,\n    messages,\n    createdAt: r.json.created_at,\n    updatedAt: r.json.updated_at,\n  };\n});\nreturn [{ json: { conversations, total: conversations.length } }];"
+        "jsCode": "const rows = $input.all();\nconst conversations = rows.map((r) => {\n  const labels = Array.isArray(r.json.labels) ? r.json.labels : typeof r.json.labels === 'string' ? JSON.parse(r.json.labels || '[]') : [];\n  return {\n    id: r.json.id,\n    customerUserId: r.json.customer_user_id,\n    customerExternalId: r.json.external_user_id,\n    customerName: r.json.display_name || r.json.external_user_id || r.json.id,\n    customerAvatar: r.json.picture_url || null,\n    customerEmail: r.json.email || '',\n    customerPhone: r.json.phone || '',\n    channel: r.json.channel,\n    status: r.json.status,\n    lastMessage: r.json.last_message || '',\n    lastMessageAt: r.json.last_message_at,\n    unreadCount: parseInt(r.json.unread_count) || 0,\n    labels,\n    messages: [],\n    createdAt: r.json.created_at,\n    updatedAt: r.json.updated_at,\n  };\n});\nreturn [{ json: { conversations, total: conversations.length } }];"
       }
     },
     {
@@ -60,6 +60,52 @@
 
 
 
+    {
+      "id": "wh-get-msgs",
+      "name": "WH: Get Messages",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 200],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "admin/messages",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "pg-get-msgs",
+      "name": "PG: Get Messages",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [240, 200],
+      "credentials": {
+        "postgres": { "id": "n5ShY9BluRF19UVO", "name": "Postgres account" }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COALESCE((SELECT json_agg(json_build_object('id', m.id::TEXT, 'conversationId', m.conversation_id::TEXT, 'senderType', m.sender_type, 'type', m.sender_type, 'direction', m.direction, 'messageType', m.message_type, 'content', COALESCE(m.content_text, ''), 'contentText', COALESCE(m.content_text, ''), 'sender', json_build_object('id', COALESCE(u.id::TEXT, m.sender_type), 'name', COALESCE(u.display_name, u.external_user_id, m.sender_type), 'type', m.sender_type, 'avatar', u.picture_url), 'timestamp', m.created_at, 'isRead', true) ORDER BY m.created_at ASC) FROM messages m LEFT JOIN users u ON m.sender_user_id = u.id WHERE m.conversation_id = '{{ $json.query.conversationId }}'::UUID AND m.is_deleted = FALSE), '[]'::json) AS messages, (SELECT COUNT(*)::INT FROM messages WHERE conversation_id = '{{ $json.query.conversationId }}'::UUID AND is_deleted = FALSE) AS total;",
+        "options": {}
+      }
+    },
+    {
+      "id": "res-get-msgs",
+      "name": "RES: Get Messages",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [480, 200],
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "*" },
+              { "name": "Content-Type", "value": "application/json" }
+            ]
+          }
+        }
+      }
+    },
     {
       "id": "wh-send",
       "name": "WH: Send Message",
@@ -451,7 +497,12 @@
     "Format: Conversations": {
       "main": [[{ "node": "RES: Get Conversations", "type": "main", "index": 0 }]]
     },
-
+    "WH: Get Messages": {
+      "main": [[{ "node": "PG: Get Messages", "type": "main", "index": 0 }]]
+    },
+    "PG: Get Messages": {
+      "main": [[{ "node": "RES: Get Messages", "type": "main", "index": 0 }]]
+    },
     "WH: Send Message": {
       "main": [[{ "node": "PG: Save Admin Message", "type": "main", "index": 0 }]]
     },

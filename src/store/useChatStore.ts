@@ -24,7 +24,6 @@ interface ChatStore {
   searchQuery: string;
   conversationsLoading: boolean;
   fetchConversations: (silent?: boolean) => Promise<void>;
-  refreshConversations: () => Promise<void>;
   selectConversation: (id: string) => Promise<void>;
   setConversationFilter: (filter: 'all' | 'open' | 'pending' | 'resolved') => void;
   setSearchQuery: (query: string) => void;
@@ -234,24 +233,35 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 
-  refreshConversations: async () => {
-    // Silent refresh — just call fetchConversations with silent=true
-    await get().fetchConversations(true);
-  },
-
   selectConversation: async (id: string) => {
-    set({ selectedConversationId: id, messagesLoading: false });
+    set({ selectedConversationId: id, messagesLoading: true });
 
     // Mark as read ทันทีที่เลือก conversation
     get().markConversationRead(id);
 
-    // Messages มากับ conversations แล้ว — ไม่ต้อง fetch แยก
-    const existingConversation = get().conversations.find((c) => c.id === id);
-    if (existingConversation && existingConversation.unreadCount > 0) {
-      const conversations = get().conversations.map((c) =>
-        c.id === id ? { ...c, unreadCount: 0 } : c
-      );
-      set({ conversations });
+    try {
+      // Check if conversation is already loaded in memory
+      const existingConversation = get().conversations.find((c) => c.id === id);
+      if (existingConversation && existingConversation.messages.length > 0) {
+        if (existingConversation.unreadCount > 0) {
+          const conversations = get().conversations.map((c) =>
+            c.id === id ? { ...c, unreadCount: 0 } : c
+          );
+          set({ conversations, messagesLoading: false });
+        } else {
+          set({ messagesLoading: false });
+        }
+      } else {
+        // Fetch messages from API
+        const messages = await messagesAPI.getByConversation(id);
+        const conversations = get().conversations.map((c) =>
+          c.id === id ? { ...c, messages, unreadCount: 0 } : c
+        );
+        set({ conversations, messagesLoading: false });
+      }
+    } catch (error) {
+      console.error('Failed to select conversation:', error);
+      set({ messagesLoading: false });
     }
   },
 

@@ -75,30 +75,52 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
     lastMessageCountRef.current = conversation.messages?.length || 0;
   }, [conversation?.id]);
 
-  // Messages มาพร้อม conversations แล้ว ไม่ต้อง fetch แยก
-  // Scroll to bottom when conversation changes or messages update
+  // Initial message load — ดึงข้อความเมื่อเลือกบทสนทนา
   useEffect(() => {
     if (!conversation) return;
-    scrollToBottom();
-  }, [conversation?.id, conversation?.messages?.length]);
-
-  // Polling — refresh conversations list every 5 seconds to get new messages
-  useEffect(() => {
-    if (!conversation) return;
-
-    const pollConversations = async () => {
+    const convId = conversation.id;
+    const loadMessages = async () => {
       try {
-        // Conversation list already includes messages — just refresh to get updates
-        const { refreshConversations } = useChatStore.getState();
-        if (refreshConversations) {
-          await refreshConversations();
+        const messages = await messagesAPI.getByConversation(convId);
+        if (messages.length > 0) {
+          const store = useChatStore.getState();
+          const existingConv = store.conversations.find((c) => c.id === convId);
+          const existingIds = new Set((existingConv?.messages || []).filter((m) => !m.id.startsWith('temp_')).map((m) => m.id));
+          const newMsgs = messages.filter((m) => !existingIds.has(m.id));
+          newMsgs.forEach((msg) => addMessageToConversation(convId, msg));
+          scrollToBottom();
+        }
+      } catch (e) { /* will retry via poll */ }
+    };
+    loadMessages();
+  }, [conversation?.id]);
+
+  useEffect(() => {
+    if (!conversation) return;
+    const convId = conversation.id;
+
+    const pollMessages = async () => {
+      try {
+        const messages = await messagesAPI.getByConversation(convId);
+        const store = useChatStore.getState();
+        const existingConv = store.conversations.find((c) => c.id === convId);
+        if (!existingConv) return;
+
+        const realMessages = existingConv.messages.filter((m) => !m.id.startsWith('temp_'));
+        const existingIds = new Set(realMessages.map((m) => m.id));
+        const newMsgs = messages.filter((m) => !existingIds.has(m.id));
+
+        if (newMsgs.length > 0) {
+          newMsgs.forEach((msg) => addMessageToConversation(convId, msg));
+          lastMessageCountRef.current = messages.length;
+          scrollToBottom();
         }
       } catch (error) {
         // Silently fail — will retry on next poll
       }
     };
 
-    const interval = setInterval(pollConversations, 5000);
+    const interval = setInterval(pollMessages, 5000);
     return () => clearInterval(interval);
   }, [conversation?.id]);
 
