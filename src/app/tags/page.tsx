@@ -5,7 +5,7 @@ import { ProtectedLayout } from '@/components/layout/ProtectedLayout';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { Tag, Plus, Trash2, Loader, FolderOpen, Edit2, X, Check } from 'lucide-react';
+import { Tag, Plus, Trash2, Loader, FolderOpen } from 'lucide-react';
 import { tagsAPI } from '@/lib/api';
 
 interface TagItem {
@@ -21,56 +21,26 @@ const PRESET_COLORS = [
   '#0d9488', '#c026d3', '#65a30d', '#e11d48', '#0284c7',
 ];
 
-const DEFAULT_CATEGORIES = ['ทั่วไป', 'ลูกค้า', 'บทสนทนา'];
+// DB ENUM keys → Thai display labels
+const SCOPE_LABELS: Record<string, string> = {
+  global: 'ทั่วไป',
+  customer: 'ลูกค้า',
+  conversation: 'บทสนทนา',
+};
+
+const SCOPE_KEYS = Object.keys(SCOPE_LABELS); // ['global', 'customer', 'conversation']
+
+const scopeLabel = (key: string) => SCOPE_LABELS[key] || key;
 
 function TagsContent() {
   const [tags, setTags] = useState<TagItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState(PRESET_COLORS[0]);
-  const [newTagCategory, setNewTagCategory] = useState('ทั่วไป');
+  const [newTagCategory, setNewTagCategory] = useState('global');
   const [hexInput, setHexInput] = useState(PRESET_COLORS[0]);
   const [saving, setSaving] = useState(false);
   const [filterCategory, setFilterCategory] = useState('all');
-
-  // Custom categories: saved in localStorage + derived from existing tags
-  const [customCategories, setCustomCategories] = useState<string[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('tag_categories');
-      return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
-    }
-    return DEFAULT_CATEGORIES;
-  });
-  const [showCategoryEditor, setShowCategoryEditor] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
-
-  // Merge custom categories with categories found in existing tags
-  const allCategories = Array.from(new Set([
-    ...customCategories,
-    ...tags.map((t) => t.scope).filter(Boolean),
-  ]));
-
-  const saveCategoriesLocal = (cats: string[]) => {
-    setCustomCategories(cats);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('tag_categories', JSON.stringify(cats));
-    }
-  };
-
-  const handleAddCategory = () => {
-    const name = newCategoryName.trim();
-    if (!name || allCategories.includes(name)) return;
-    saveCategoriesLocal([...customCategories, name]);
-    setNewCategoryName('');
-  };
-
-  const handleDeleteCategory = (cat: string) => {
-    // Don't delete if tags use this category
-    if (tags.some((t) => t.scope === cat)) return;
-    saveCategoriesLocal(customCategories.filter((c) => c !== cat));
-    if (filterCategory === cat) setFilterCategory('all');
-    if (newTagCategory === cat) setNewTagCategory(allCategories[0] || 'ทั่วไป');
-  };
 
   const fetchTags = async () => {
     try {
@@ -79,7 +49,7 @@ function TagsContent() {
         id: t.id,
         name: t.name,
         color: t.color,
-        scope: t.scope || 'ทั่วไป',
+        scope: t.scope || 'global',
       }));
       setTags(items);
     } catch (e) {
@@ -141,8 +111,8 @@ function TagsContent() {
     ? tags
     : tags.filter((t) => t.scope === filterCategory);
 
-  const categoryTagCounts = allCategories.reduce((acc, cat) => {
-    acc[cat] = tags.filter((t) => (t.scope || 'ทั่วไป') === cat).length;
+  const categoryTagCounts = SCOPE_KEYS.reduce((acc, cat) => {
+    acc[cat] = tags.filter((t) => (t.scope || 'global') === cat).length;
     return acc;
   }, {} as Record<string, number>);
 
@@ -182,8 +152,8 @@ function TagsContent() {
                 onChange={(e) => setNewTagCategory(e.target.value)}
                 className="w-full h-10 rounded-md border border-border bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
               >
-                {allCategories.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
+                {SCOPE_KEYS.map((key) => (
+                  <option key={key} value={key}>{scopeLabel(key)}</option>
                 ))}
               </select>
             </div>
@@ -246,94 +216,27 @@ function TagsContent() {
         </div>
       </Card>
 
-      {/* Category Management & Filter */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={() => setFilterCategory('all')}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                filterCategory === 'all' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              }`}
-            >
-              ทั้งหมด ({tags.length})
-            </button>
-            {allCategories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setFilterCategory(cat)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  filterCategory === cat ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                }`}
-              >
-                {cat} ({categoryTagCounts[cat] || 0})
-              </button>
-            ))}
-          </div>
+      {/* Filter by category */}
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={() => setFilterCategory('all')}
+          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+            filterCategory === 'all' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+          }`}
+        >
+          ทั้งหมด ({tags.length})
+        </button>
+        {SCOPE_KEYS.map((key) => (
           <button
-            onClick={() => setShowCategoryEditor(!showCategoryEditor)}
-            className={`p-1.5 rounded-lg transition-colors ${
-              showCategoryEditor ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
+            key={key}
+            onClick={() => setFilterCategory(key)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              filterCategory === key ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'
             }`}
-            title="จัดการหมวดหมู่"
           >
-            <Edit2 className="h-4 w-4" />
+            {scopeLabel(key)} ({categoryTagCounts[key] || 0})
           </button>
-        </div>
-
-        {/* Category Editor */}
-        {showCategoryEditor && (
-          <Card className="p-4 border-dashed">
-            <h3 className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
-              <FolderOpen className="h-3.5 w-3.5" />
-              จัดการหมวดหมู่
-            </h3>
-            <div className="flex flex-wrap gap-2 mb-3">
-              {allCategories.map((cat) => {
-                const usedCount = tags.filter((t) => t.scope === cat).length;
-                return (
-                  <span
-                    key={cat}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground"
-                  >
-                    {cat}
-                    {usedCount > 0 && (
-                      <span className="text-[10px] text-muted-foreground/60">({usedCount})</span>
-                    )}
-                    {usedCount === 0 && (
-                      <button
-                        onClick={() => handleDeleteCategory(cat)}
-                        className="hover:text-red-500 transition-colors"
-                        title="ลบหมวดหมู่"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
-                  </span>
-                );
-              })}
-            </div>
-            <div className="flex gap-2">
-              <Input
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddCategory(); }}}
-                placeholder="ชื่อหมวดหมู่ใหม่..."
-                className="h-8 text-xs flex-1"
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 px-3 gap-1 text-xs"
-                onClick={handleAddCategory}
-                disabled={!newCategoryName.trim()}
-              >
-                <Plus className="h-3 w-3" />
-                เพิ่ม
-              </Button>
-            </div>
-          </Card>
-        )}
+        ))}
       </div>
 
       {/* Tags List */}
@@ -371,7 +274,7 @@ function TagsContent() {
                   </span>
                   <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded flex items-center gap-1">
                     <FolderOpen className="h-2.5 w-2.5" />
-                    {tag.scope || 'ทั่วไป'}
+                    {scopeLabel(tag.scope || 'global')}
                   </span>
                 </div>
                 <button

@@ -345,7 +345,7 @@ export const tagsAPI = {
     return Array.isArray(data) ? data : (data.tags || data || []);
   },
 
-  create: async (name: string, color: string, scope: string = 'ทั่วไป'): Promise<Tag> => {
+  create: async (name: string, color: string, scope: string = 'global'): Promise<Tag> => {
     if (MOCK_MODE) { await delay(200); return { id: Date.now().toString(), name, color, scope }; }
     const response = await n8nClient.post('/admin/tags', { name, color, scope });
     return response.data;
