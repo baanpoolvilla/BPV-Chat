@@ -317,19 +317,21 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       // อัพเดต readCount เพื่อไม่ให้ข้อความ admin ตัวเองนับเป็น unread
       get().markConversationRead(conversationId);
 
-      // แทนที่ temp message ด้วย message จริงที่ได้จาก API
-      const convsAfter = get().conversations.map((c) => {
-        if (c.id === conversationId) {
-          return {
-            ...c,
-            messages: c.messages.map((m) =>
-              m.id === tempMessage.id ? { ...savedMessage, conversationId } : m
-            ),
-          };
-        }
-        return c;
-      });
-      set({ conversations: convsAfter });
+      // แทนที่ temp message ด้วย message จริงที่ได้จาก API (ถ้าได้ข้อมูลกลับมา)
+      if (savedMessage && savedMessage.id) {
+        const convsAfter = get().conversations.map((c) => {
+          if (c.id === conversationId) {
+            return {
+              ...c,
+              messages: c.messages.map((m) =>
+                m.id === tempMessage.id ? { ...savedMessage, conversationId } : m
+              ),
+            };
+          }
+          return c;
+        });
+        set({ conversations: convsAfter });
+      }
     } catch (error) {
       console.error('Failed to send message:', error);
       // ลบ temp message ออกถ้าส่งไม่สำเร็จ

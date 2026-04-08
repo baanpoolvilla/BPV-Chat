@@ -3,14 +3,13 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Conversation, Tag as TagType } from '@/types';
 import { useChatStore } from '@/store/useChatStore';
-import { messagesAPI } from '@/lib/api';
+import { messagesAPI, tagsAPI } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ChatBubble } from './ChatBubble';
 import {
   Send,
   Loader,
-  CheckCircle2,
   MessageSquareText,
   ChevronRight,
   Phone,
@@ -45,15 +44,12 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
   const tagDropdownRef = useRef<HTMLDivElement>(null);
   const { sendMessage, setConversationLabels, updateConversationStatus, addMessageToConversation } = useChatStore();
 
-  const N8N_URL = process.env.NEXT_PUBLIC_N8N_URL || 'http://localhost:5678/webhook';
-
   // Fetch available tags from DB
   useEffect(() => {
     const fetchTags = async () => {
       try {
-        const res = await fetch(`${N8N_URL}/admin/tags`);
-        const data = await res.json();
-        setAvailableTags(Array.isArray(data) ? data : data.tags || []);
+        const data = await tagsAPI.getAll();
+        setAvailableTags(Array.isArray(data) ? data : []);
       } catch (e) {
         console.error('Failed to fetch tags:', e);
       }
@@ -240,39 +236,16 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
               {conversation.customerAvatar ? (
                 <img src={conversation.customerAvatar} alt={conversation.customerName} className="w-full h-full object-cover" />
               ) : (
-                conversation.customerName.charAt(0)
+                (conversation.customerName || '?').charAt(0)
               )}
             </div>
             <div className="min-w-0">
               <h2 className="text-sm font-semibold truncate">{conversation.customerName}</h2>
-              <div className="flex items-center gap-2">
-                <span className={cn(
-                  'px-1.5 py-0.5 rounded text-[10px] font-medium',
-                  conversation.status !== 'resolved' && 'bg-blue-100 text-blue-700',
-                  conversation.status === 'resolved' && 'bg-green-100 text-green-700'
-                )}>
-                  {conversation.status === 'resolved' ? 'เสร็จสิ้น' : 'กำลังสนทนา'}
-                </span>
-              </div>
             </div>
           </div>
 
           {/* Action Buttons */}
           <div className="flex items-center gap-1.5">
-            {conversation.status !== 'resolved' && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs gap-1.5 h-8 border-green-300 text-green-600 hover:bg-green-50"
-                  onClick={handleMarkResolved}
-                >
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  เสร็จสิ้น
-                </Button>
-              </>
-            )}
-
             {/* Toggle customer panel */}
             <button
               onClick={() => setShowCustomerPanel(!showCustomerPanel)}
@@ -303,8 +276,7 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
         </div>
 
         {/* Input Area */}
-        {conversation.status !== 'resolved' && (
-          <div className="border-t border-border bg-white p-3">
+        <div className="border-t border-border bg-white p-3">
             {/* Quick messages panel */}
             {showQuickMessages && (
               <div className="mb-3 p-3 bg-muted/50 rounded-lg animate-slide-in max-h-48 overflow-y-auto">
@@ -380,7 +352,6 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
               </Button>
             </div>
           </div>
-        )}
       </div>
 
       {/* Customer Details Panel (Right) */}
@@ -392,7 +363,7 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
               {conversation.customerAvatar ? (
                 <img src={conversation.customerAvatar} alt={conversation.customerName} className="w-full h-full object-cover" />
               ) : (
-                conversation.customerName.charAt(0)
+                (conversation.customerName || '?').charAt(0)
               )}
             </div>
             <h3 className="font-semibold text-sm">{conversation.customerName}</h3>

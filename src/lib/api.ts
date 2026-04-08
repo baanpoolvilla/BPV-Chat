@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
-import { Conversation, Message, Stats, User } from '@/types';
+import { Conversation, Message, Stats, User, Tag } from '@/types';
 import {
   generateMockConversations,
   getMockConversationById,
@@ -331,6 +331,29 @@ export const lineAPI = {
       }
       return c;
     });
+  },
+};
+
+// ─────────────────────────────────────────────────────────────
+// Tags APIs  →  N8N: GET/POST/DELETE /admin/tags
+// ─────────────────────────────────────────────────────────────
+export const tagsAPI = {
+  getAll: async (): Promise<Tag[]> => {
+    if (MOCK_MODE) { await delay(200); return []; }
+    const response = await n8nClient.get('/admin/tags');
+    const data = response.data;
+    return Array.isArray(data) ? data : (data.tags || data || []);
+  },
+
+  create: async (name: string, color: string, scope: Tag['scope'] = 'global'): Promise<Tag> => {
+    if (MOCK_MODE) { await delay(200); return { id: Date.now().toString(), name, color, scope }; }
+    const response = await n8nClient.post('/admin/tags', { name, color, scope });
+    return response.data;
+  },
+
+  delete: async (tagId: string): Promise<void> => {
+    if (MOCK_MODE) { await delay(200); return; }
+    await n8nClient.delete(`/admin/tags/${tagId}`);
   },
 };
 

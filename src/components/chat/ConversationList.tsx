@@ -245,7 +245,7 @@ export function ConversationList() {
                       {conversation.customerAvatar ? (
                         <img src={conversation.customerAvatar} alt={conversation.customerName} className="w-full h-full object-cover" />
                       ) : (
-                        conversation.customerName.charAt(0)
+                        (conversation.customerName || '?').charAt(0)
                       )}
                     </div>
                     {/* Channel indicator */}
@@ -281,14 +281,6 @@ export function ConversationList() {
                     {/* Bottom row: labels + unread */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1 flex-1 min-w-0">
-                        {/* Status badge */}
-                        <span className={cn(
-                          'px-1.5 py-0.5 rounded text-[10px] font-medium',
-                          conversation.status !== 'resolved' && 'bg-blue-100 text-blue-700',
-                          conversation.status === 'resolved' && 'bg-green-100 text-green-700'
-                        )}>
-                          {conversation.status === 'resolved' ? 'เสร็จ' : 'เปิด'}
-                        </span>
                         {/* Labels */}
                         {conversation.labels.slice(0, 2).map((label) => (
                           <span
