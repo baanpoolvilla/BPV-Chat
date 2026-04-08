@@ -1,0 +1,211 @@
+{
+  "name": "LINE Chat Receiver",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "line",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "id": "wh-line-incoming",
+      "name": "WH: LINE Incoming",
+      "webhookId": "line-incoming-wh"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst events = body?.events || [];\n\nif (!events.length) return [];\n\nconst event = events[0];\nif (event.type !== \"message\") return [];\n\nconst msg = event.message;\nconst esc = (s) => String(s || '').replace(/'/g, \"''\");\n\nlet text = '';\nswitch(msg.type) {\n  case 'text': text = msg.text; break;\n  case 'sticker': text = '[สติกเกอร์]'; break;\n  case 'image': text = '[รูปภาพ]'; break;\n  case 'video': text = '[วิดีโอ]'; break;\n  case 'audio': text = '[เสียง]'; break;\n  case 'location': text = '[ตำแหน่ง] ' + (msg.address || ''); break;\n  case 'file': text = '[ไฟล์] ' + (msg.fileName || ''); break;\n  default: text = '[' + msg.type + ']';\n}\n\nconst validTypes = ['text','image','video','audio','file','location','sticker'];\nconst dbType = validTypes.includes(msg.type) ? msg.type : 'text';\n\nreturn [{\n  json: {\n    lineUserId: event.source.userId,\n    replyToken: event.replyToken,\n    messageText: esc(text),\n    messageType: dbType,\n    messageId: String(msg.id)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ],
+      "id": "code-parse-event",
+      "name": "Parse Event"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.line.me/v2/bot/profile/{{ $json.lineUserId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_LINE_CHANNEL_ACCESS_TOKEN"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        300
+      ],
+      "id": "http-get-profile",
+      "name": "Get LINE Profile",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = $('Parse Event').first().json;\nlet displayName = 'LINE User';\nlet pictureUrl = '';\n\ntry {\n  const profile = $('Get LINE Profile').first().json;\n  if (profile && profile.displayName) displayName = profile.displayName;\n  if (profile && profile.pictureUrl) pictureUrl = profile.pictureUrl;\n} catch(e) {}\n\nconst esc = (s) => String(s || '').replace(/'/g, \"''\");\n\nreturn [{\n  json: {\n    lineUserId: parsed.lineUserId,\n    replyToken: parsed.replyToken,\n    messageText: parsed.messageText,\n    messageType: parsed.messageType,\n    messageId: parsed.messageId,\n    displayName: esc(displayName),\n    pictureUrl: esc(pictureUrl)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        300
+      ],
+      "id": "code-prepare-data",
+      "name": "Prepare Data"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO users (display_name, picture_url, channel, external_user_id, role)\nVALUES (\n  '{{ $json.displayName }}',\n  '{{ $json.pictureUrl }}',\n  'line',\n  '{{ $json.lineUserId }}',\n  'customer'\n)\nON CONFLICT (channel, external_user_id) DO UPDATE SET\n  display_name = EXCLUDED.display_name,\n  picture_url = EXCLUDED.picture_url,\n  updated_at = NOW()\nRETURNING id;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1160,
+        300
+      ],
+      "id": "pg-upsert-user",
+      "name": "PG: Upsert User",
+      "credentials": {
+        "postgres": {
+          "id": "n5ShY9BluRF19UVO",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH existing AS (\n  SELECT id FROM conversations\n  WHERE customer_user_id = '{{ $json.id }}'::uuid\n    AND status IN ('open', 'pending')\n  ORDER BY last_message_at DESC NULLS LAST\n  LIMIT 1\n),\ninserted AS (\n  INSERT INTO conversations (customer_user_id, channel, status)\n  SELECT '{{ $json.id }}'::uuid, 'line', 'open'\n  WHERE NOT EXISTS (SELECT 1 FROM existing)\n  RETURNING id\n)\nSELECT id FROM existing UNION ALL SELECT id FROM inserted LIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1400,
+        300
+      ],
+      "id": "pg-find-create-conv",
+      "name": "PG: Find/Create Conv",
+      "credentials": {
+        "postgres": {
+          "id": "n5ShY9BluRF19UVO",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO messages (\n  conversation_id,\n  sender_user_id,\n  sender_type,\n  direction,\n  message_type,\n  content_text,\n  provider_message_id\n) VALUES (\n  '{{ $json.id }}'::uuid,\n  '{{ $(\"PG: Upsert User\").first().json.id }}'::uuid,\n  'customer',\n  'inbound',\n  '{{ $(\"Prepare Data\").first().json.messageType }}',\n  '{{ $(\"Prepare Data\").first().json.messageText }}',\n  '{{ $(\"Prepare Data\").first().json.messageId }}'\n)\nRETURNING id, created_at;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1640,
+        300
+      ],
+      "id": "pg-save-message",
+      "name": "PG: Save Message",
+      "credentials": {
+        "postgres": {
+          "id": "n5ShY9BluRF19UVO",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "WH: LINE Incoming": {
+      "main": [
+        [
+          {
+            "node": "Parse Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Event": {
+      "main": [
+        [
+          {
+            "node": "Get LINE Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get LINE Profile": {
+      "main": [
+        [
+          {
+            "node": "Prepare Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Data": {
+      "main": [
+        [
+          {
+            "node": "PG: Upsert User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PG: Upsert User": {
+      "main": [
+        [
+          {
+            "node": "PG: Find/Create Conv",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PG: Find/Create Conv": {
+      "main": [
+        [
+          {
+            "node": "PG: Save Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

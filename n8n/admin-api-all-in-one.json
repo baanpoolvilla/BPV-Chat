@@ -1,0 +1,917 @@
+﻿{
+    "name":  "BaanPool Admin API",
+    "nodes":  [
+                  {
+                      "id":  "wh-get-convs",
+                      "name":  "WH: Get Conversations",
+                      "type":  "n8n-nodes-base.webhook",
+                      "typeVersion":  2,
+                      "position":  [
+                                       0,
+                                       0
+                                   ],
+                      "parameters":  {
+                                         "httpMethod":  "GET",
+                                         "path":  "admin/conversations",
+                                         "responseMode":  "responseNode",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "pg-get-convs",
+                      "name":  "PG: Get Conversations",
+                      "type":  "n8n-nodes-base.postgres",
+                      "typeVersion":  2.5,
+                      "position":  [
+                                       240,
+                                       0
+                                   ],
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "n5ShY9BluRF19UVO",
+                                                           "name":  "Postgres account"
+                                                       }
+                                      },
+                      "parameters":  {
+                                         "operation":  "executeQuery",
+                                         "query":  "SELECT\n  c.id::TEXT                      AS id,\n  c.channel,\n  c.status,\n  c.last_message_at,\n  c.created_at,\n  c.updated_at,\n  c.bot_enabled,\n  u.id::TEXT                      AS customer_user_id,\n  u.external_user_id,\n  u.display_name,\n  u.picture_url,\n  u.phone,\n  u.email,\n  COALESCE((\n    SELECT m.content_text\n    FROM   messages m\n    WHERE  m.conversation_id = c.id\n      AND  m.is_deleted = FALSE\n    ORDER  BY m.created_at DESC\n    LIMIT  1\n  ), \u0027\u0027) AS last_message,\n  COALESCE((\n    SELECT json_agg(\n             json_build_object(\n               \u0027id\u0027,    t.id::TEXT,\n               \u0027name\u0027,  t.name,\n               \u0027color\u0027, t.color,\n               \u0027scope\u0027, t.scope\n             ) ORDER BY t.name\n           )\n    FROM   conversation_tags ct\n    JOIN   tags t ON ct.tag_id = t.id\n    WHERE  ct.conversation_id = c.id\n  ), \u0027[]\u0027::json) AS labels,\n  (\n    SELECT COUNT(*)::INT\n    FROM   messages m\n    WHERE  m.conversation_id = c.id\n      AND  m.direction = \u0027inbound\u0027\n      AND  m.is_deleted = FALSE\n      AND  NOT EXISTS (\n             SELECT 1\n             FROM   message_read_receipts r\n             WHERE  r.message_id = m.id\n           )\n  ) AS unread_count\nFROM  conversations c\nJOIN  users u ON c.customer_user_id = u.id\nWHERE c.status != \u0027archived\u0027\nORDER BY c.last_message_at DESC NULLS LAST\nLIMIT 50;",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "code-format-convs",
+                      "name":  "Format: Conversations",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       480,
+                                       0
+                                   ],
+                      "parameters":  {
+                                         "jsCode":  "const rows = $input.all();\nconst conversations = rows.map((r) =\u003e {\n  const labels = Array.isArray(r.json.labels)\n    ? r.json.labels\n    : typeof r.json.labels === \u0027string\u0027\n      ? JSON.parse(r.json.labels || \u0027[]\u0027)\n      : [];\n  return {\n    id:                r.json.id,\n    customerUserId:    r.json.customer_user_id,\n    customerExternalId: r.json.external_user_id,\n    customerName:      r.json.display_name || r.json.external_user_id || r.json.id,\n    customerAvatar:    r.json.picture_url  || null,\n    customerEmail:     r.json.email        || \u0027\u0027,\n    customerPhone:     r.json.phone        || \u0027\u0027,\n    channel:           r.json.channel,\n    status:            r.json.status,\n    lastMessage:       r.json.last_message  || \u0027\u0027,\n    lastMessageAt:     r.json.last_message_at,\n    unreadCount:       parseInt(r.json.unread_count) || 0,\n    labels,\n    messages: [],\n    createdAt: r.json.created_at,\n    updatedAt: r.json.updated_at,\n  };\n});\nreturn [{ json: { conversations, total: conversations.length } }];"
+                                     }
+                  },
+                  {
+                      "id":  "res-get-convs",
+                      "name":  "RES: Get Conversations",
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       720,
+                                       0
+                                   ],
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{ JSON.stringify($json) }}",
+                                         "options":  {
+                                                         "responseHeaders":  {
+                                                                                 "entries":  [
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Origin",
+                                                                                                     "value":  "*"
+                                                                                                 }
+                                                                                             ]
+                                                                             }
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "wh-get-msgs",
+                      "name":  "WH: Get Messages",
+                      "type":  "n8n-nodes-base.webhook",
+                      "typeVersion":  2,
+                      "position":  [
+                                       0,
+                                       200
+                                   ],
+                      "parameters":  {
+                                         "httpMethod":  "GET",
+                                         "path":  "admin/messages",
+                                         "responseMode":  "responseNode",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "pg-get-msgs",
+                      "name":  "PG: Get Messages",
+                      "type":  "n8n-nodes-base.postgres",
+                      "typeVersion":  2.5,
+                      "position":  [
+                                       240,
+                                       200
+                                   ],
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "n5ShY9BluRF19UVO",
+                                                           "name":  "Postgres account"
+                                                       }
+                                      },
+                      "parameters":  {
+                                         "operation":  "executeQuery",
+                                         "query":  "SELECT\n  m.id::TEXT                                           AS id,\n  m.conversation_id::TEXT                              AS conversation_id,\n  m.sender_type,\n  m.direction,\n  m.message_type,\n  COALESCE(m.content_text, \u0027\u0027)                         AS content_text,\n  m.created_at,\n  u.id::TEXT                                           AS sender_user_id,\n  COALESCE(u.display_name, u.external_user_id, m.sender_type) AS sender_name,\n  u.picture_url                                        AS sender_avatar\nFROM  messages m\nLEFT  JOIN users u ON m.sender_user_id = u.id\nWHERE m.conversation_id = \u0027{{ $json.query.conversationId }}\u0027::UUID\n  AND m.is_deleted = FALSE\nORDER BY m.created_at ASC\nLIMIT 200;",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "code-format-msgs",
+                      "name":  "Format: Messages",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       480,
+                                       200
+                                   ],
+                      "parameters":  {
+                                         "jsCode":  "const messages = $input.all().map(r =\u003e ({\n  id:          r.json.id,\n  conversationId: r.json.conversation_id,\n  senderType:  r.json.sender_type,\n  type:        r.json.sender_type,\n  direction:   r.json.direction,\n  messageType: r.json.message_type,\n  contentText: r.json.content_text,\n  content:     r.json.content_text || \u0027\u0027,\n  sender: {\n    id:     r.json.sender_user_id || r.json.sender_type,\n    name:   r.json.sender_name    || r.json.sender_type,\n    type:   r.json.sender_type,\n    avatar: r.json.sender_avatar  || null,\n  },\n  timestamp: r.json.created_at,\n  isRead: true,\n}));\nreturn [{ json: { messages, total: messages.length } }];"
+                                     }
+                  },
+                  {
+                      "id":  "res-get-msgs",
+                      "name":  "RES: Get Messages",
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       720,
+                                       200
+                                   ],
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{ JSON.stringify($json) }}",
+                                         "options":  {
+                                                         "responseHeaders":  {
+                                                                                 "entries":  [
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Origin",
+                                                                                                     "value":  "*"
+                                                                                                 }
+                                                                                             ]
+                                                                             }
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "wh-send",
+                      "name":  "WH: Send Message",
+                      "type":  "n8n-nodes-base.webhook",
+                      "typeVersion":  2,
+                      "position":  [
+                                       0,
+                                       400
+                                   ],
+                      "parameters":  {
+                                         "httpMethod":  "POST",
+                                         "path":  "admin/messages/send",
+                                         "responseMode":  "responseNode",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "pg-save-admin-msg",
+                      "name":  "PG: Save Admin Message",
+                      "type":  "n8n-nodes-base.postgres",
+                      "typeVersion":  2.5,
+                      "position":  [
+                                       240,
+                                       400
+                                   ],
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "n5ShY9BluRF19UVO",
+                                                           "name":  "Postgres account"
+                                                       }
+                                      },
+                      "parameters":  {
+                                         "operation":  "executeQuery",
+                                         "query":  "WITH conv_user AS (\n  SELECT u.external_user_id\n  FROM   conversations c\n  JOIN   users u ON c.customer_user_id = u.id\n  WHERE  c.id = \u0027{{ $json.body.conversationId }}\u0027::UUID\n),\ninserted AS (\n  INSERT INTO messages (conversation_id, sender_type, direction, message_type, content_text)\n  VALUES (\n    \u0027{{ $json.body.conversationId }}\u0027::UUID,\n    \u0027admin\u0027,\n    \u0027outbound\u0027,\n    \u0027text\u0027,\n    \u0027{{ $json.body.content }}\u0027\n  )\n  RETURNING id::TEXT, conversation_id::TEXT, sender_type, content_text, created_at\n)\nSELECT i.*, cu.external_user_id\nFROM   inserted i, conv_user cu;",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "http-line-push",
+                      "name":  "LINE: Push Message",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.2,
+                      "position":  [
+                                       480,
+                                       400
+                                   ],
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://api.line.me/v2/bot/message/push",
+                                         "sendHeaders":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "name":  "Authorization",
+                                                                                         "value":  "Bearer OliHOtY4w4VUsCji08aXjtCr1prj15xCI3tMsxXLocNkkomZV0hlg5ZDkjJWU2N+ZOCFBolLoVXKX3JiiCmYFiykyskutgMEH4uQjS7pj359HiuwfJMQSQxjRQnN7cZgVoBTo9Ro2LR9xzmZNRdA5wdB04t89/1O/w1cDnyilFU="
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={\\n  \"to\": \"{{ $(\u0027PG: Save Admin Message\u0027).first().json.external_user_id }}\",\\n  \"messages\": [{ \"type\": \"text\", \"text\": \"{{ $(\u0027WH: Send Message\u0027).first().json.body.content }}\" }]\\n}",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "code-format-send",
+                      "name":  "Format: Send Response",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       720,
+                                       400
+                                   ],
+                      "parameters":  {
+                                         "jsCode":  "const saved = $(\u0027PG: Save Admin Message\u0027).first().json;\nreturn [{ json: {\n  id:            saved.id,\n  conversationId: saved.conversation_id,\n  senderType:    \u0027admin\u0027,\n  type:          \u0027admin\u0027,\n  direction:     \u0027outbound\u0027,\n  messageType:   \u0027text\u0027,\n  contentText:   saved.content_text,\n  content:       saved.content_text || \u0027\u0027,\n  sender: { id: \u0027admin\u0027, name: \u0027Admin\u0027, type: \u0027admin\u0027 },\n  timestamp:     saved.created_at,\n  isRead:        true,\n  lineSent:      true,\n} }];"
+                                     }
+                  },
+                  {
+                      "id":  "res-send",
+                      "name":  "RES: Send Message",
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       960,
+                                       400
+                                   ],
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{ JSON.stringify($json) }}",
+                                         "options":  {
+                                                         "responseHeaders":  {
+                                                                                 "entries":  [
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Origin",
+                                                                                                     "value":  "*"
+                                                                                                 }
+                                                                                             ]
+                                                                             }
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "wh-toggle",
+                      "name":  "WH: Manage Tags",
+                      "type":  "n8n-nodes-base.webhook",
+                      "typeVersion":  2,
+                      "position":  [
+                                       0,
+                                       600
+                                   ],
+                      "parameters":  {
+                                         "httpMethod":  "POST",
+                                         "path":  "admin/conversations/:conversationId/tags",
+                                         "responseMode":  "responseNode",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "code-prepare-toggle",
+                      "name":  "Code: Parse Tags",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       240,
+                                       600
+                                   ],
+                      "parameters":  {
+                                         "jsCode":  "const params = $json.params || {};\nconst body   = $json.body   || {};\nconst conversationId = params.conversationId;\nconst tags = Array.isArray(body.tags) ? body.tags : [];\nconst cleaned = tags\n  .map((tag) =\u003e ({\n    name:  String(tag.name  || \u0027\u0027).trim(),\n    color: String(tag.color || \u0027#2563eb\u0027).trim(),\n  }))\n  .filter((tag) =\u003e tag.name.length \u003e 0);\nreturn [{ json: { conversationId, tags: cleaned } }];"
+                                     }
+                  },
+                  {
+                      "id":  "pg-toggle",
+                      "name":  "PG: Replace Tags",
+                      "type":  "n8n-nodes-base.postgres",
+                      "typeVersion":  2.5,
+                      "position":  [
+                                       480,
+                                       600
+                                   ],
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "n5ShY9BluRF19UVO",
+                                                           "name":  "Postgres account"
+                                                       }
+                                      },
+                      "parameters":  {
+                                         "operation":  "executeQuery",
+                                         "query":  "DELETE FROM conversation_tags\nWHERE conversation_id = \u0027{{ $json.conversationId }}\u0027::UUID;\n\n{{ $json.tags.map((t) =\u003e `WITH t_upsert AS (\n  INSERT INTO tags (name, color, scope)\n  VALUES (\u0027${String(t.name).replace(/\u0027/g,\"\u0027\u0027\")}\u0027, \u0027${String(t.color).replace(/\u0027/g,\"\u0027\u0027\")}\u0027, \u0027conversation\u0027)\n  ON CONFLICT (name, scope) DO UPDATE SET color = EXCLUDED.color\n  RETURNING id\n)\nINSERT INTO conversation_tags (conversation_id, tag_id)\nSELECT \u0027${$json.conversationId}\u0027::UUID, id FROM t_upsert;`).join(\u0027\\n\u0027) }}\n\nSELECT\n  \u0027{{ $json.conversationId }}\u0027 AS conversation_id,\n  COALESCE(\n    json_agg(\n      json_build_object(\u0027id\u0027, t.id::TEXT, \u0027name\u0027, t.name, \u0027color\u0027, t.color)\n      ORDER BY t.name\n    ),\n    \u0027[]\u0027::json\n  ) AS labels\nFROM  conversation_tags ct\nJOIN  tags t ON ct.tag_id = t.id\nWHERE ct.conversation_id = \u0027{{ $json.conversationId }}\u0027::UUID;",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "code-format-toggle",
+                      "name":  "Format: Tags Response",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       720,
+                                       600
+                                   ],
+                      "parameters":  {
+                                         "jsCode":  "const row = $input.first()?.json || {};\nconst labels = Array.isArray(row.labels)\n  ? row.labels\n  : typeof row.labels === \u0027string\u0027\n    ? JSON.parse(row.labels || \u0027[]\u0027)\n    : [];\nreturn [{\n  json: {\n    conversationId: row.conversation_id || $(\u0027Code: Parse Tags\u0027).first().json.conversationId,\n    labels,\n  }\n}];"
+                                     }
+                  },
+                  {
+                      "id":  "res-toggle",
+                      "name":  "RES: Manage Tags",
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       960,
+                                       600
+                                   ],
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{ JSON.stringify($json) }}",
+                                         "options":  {
+                                                         "responseHeaders":  {
+                                                                                 "entries":  [
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Origin",
+                                                                                                     "value":  "*"
+                                                                                                 }
+                                                                                             ]
+                                                                             }
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "wh-stats",
+                      "name":  "WH: Dashboard Stats",
+                      "type":  "n8n-nodes-base.webhook",
+                      "typeVersion":  2,
+                      "position":  [
+                                       0,
+                                       800
+                                   ],
+                      "parameters":  {
+                                         "httpMethod":  "GET",
+                                         "path":  "admin/dashboard/stats",
+                                         "responseMode":  "responseNode",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "pg-stats",
+                      "name":  "PG: Get Stats",
+                      "type":  "n8n-nodes-base.postgres",
+                      "typeVersion":  2.5,
+                      "position":  [
+                                       240,
+                                       800
+                                   ],
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "n5ShY9BluRF19UVO",
+                                                           "name":  "Postgres account"
+                                                       }
+                                      },
+                      "parameters":  {
+                                         "operation":  "executeQuery",
+                                         "query":  "SELECT\n  (SELECT COUNT(*) FROM conversations WHERE status != \u0027archived\u0027)             AS total_conversations,\n  (SELECT COUNT(*) FROM conversations WHERE status IN (\u0027open\u0027,\u0027pending\u0027))     AS human_required,\n  0                                                                           AS bot_handled,\n  (SELECT COUNT(*) FROM messages WHERE created_at \u003e= CURRENT_DATE\n                                    AND is_deleted = FALSE)                   AS today_messages,\n  (SELECT COUNT(DISTINCT c.id)\n   FROM   conversations c\n   JOIN   users u ON c.customer_user_id = u.id\n   WHERE  u.channel = \u0027line\u0027)                                                 AS line_count,\n  (SELECT COUNT(*) FROM conversations WHERE status = \u0027resolved\u0027)              AS resolved_count;",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "code-format-stats",
+                      "name":  "Format: Stats",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       480,
+                                       800
+                                   ],
+                      "parameters":  {
+                                         "jsCode":  "const r        = $input.first().json;\nconst total    = parseInt(r.total_conversations) || 0;\nconst human    = parseInt(r.human_required)      || 0;\nconst bot      = parseInt(r.bot_handled)         || 0;\nconst today    = parseInt(r.today_messages)      || 0;\nconst line     = parseInt(r.line_count)          || 0;\nconst resolved = parseInt(r.resolved_count)      || 0;\nreturn [{ json: {\n  totalConversations: total,\n  botHandled:         bot,\n  humanRequired:      human,\n  resolved,\n  channelStats: { line, facebook: 0, instagram: 0, tiktok: 0 },\n  todayMessages: today,\n  responseRate:  0,\n} }];"
+                                     }
+                  },
+                  {
+                      "id":  "res-stats",
+                      "name":  "RES: Dashboard Stats",
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       720,
+                                       800
+                                   ],
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{ JSON.stringify($json) }}",
+                                         "options":  {
+                                                         "responseHeaders":  {
+                                                                                 "entries":  [
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Origin",
+                                                                                                     "value":  "*"
+                                                                                                 }
+                                                                                             ]
+                                                                             }
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "wh-get-tags",
+                      "name":  "WH: Get Tags",
+                      "parameters":  {
+                                         "path":  "admin/tags",
+                                         "responseMode":  "responseNode",
+                                         "options":  {
+
+                                                     },
+                                         "httpMethod":  "GET"
+                                     },
+                      "type":  "n8n-nodes-base.webhook",
+                      "position":  [
+                                       0,
+                                       1200
+                                   ],
+                      "typeVersion":  2
+                  },
+                  {
+                      "id":  "pg-get-tags",
+                      "name":  "PG: Get Tags",
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "n5ShY9BluRF19UVO",
+                                                           "name":  "Postgres account"
+                                                       }
+                                      },
+                      "parameters":  {
+                                         "query":  "SELECT id::TEXT, name, color, scope FROM tags ORDER BY name;",
+                                         "operation":  "executeQuery",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.postgres",
+                      "position":  [
+                                       240,
+                                       1200
+                                   ],
+                      "typeVersion":  2.5
+                  },
+                  {
+                      "id":  "code-fmt-tags-list",
+                      "name":  "Format: Tags List",
+                      "parameters":  {
+                                         "jsCode":  "const rows = $input.all().map(i =\u003e i.json);\nreturn [{ json: rows }];"
+                                     },
+                      "type":  "n8n-nodes-base.code",
+                      "position":  [
+                                       480,
+                                       1200
+                                   ],
+                      "typeVersion":  2
+                  },
+                  {
+                      "id":  "res-get-tags",
+                      "name":  "RES: Get Tags",
+                      "parameters":  {
+                                         "responseBody":  "={{ $json }}",
+                                         "respondWith":  "json",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "position":  [
+                                       720,
+                                       1200
+                                   ],
+                      "typeVersion":  1.1
+                  },
+                  {
+                      "id":  "wh-create-tag",
+                      "name":  "WH: Create Tag",
+                      "parameters":  {
+                                         "path":  "admin/tags",
+                                         "responseMode":  "responseNode",
+                                         "options":  {
+
+                                                     },
+                                         "httpMethod":  "POST"
+                                     },
+                      "type":  "n8n-nodes-base.webhook",
+                      "position":  [
+                                       0,
+                                       1500
+                                   ],
+                      "typeVersion":  2
+                  },
+                  {
+                      "id":  "pg-create-tag",
+                      "name":  "PG: Create Tag",
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "n5ShY9BluRF19UVO",
+                                                           "name":  "Postgres account"
+                                                       }
+                                      },
+                      "parameters":  {
+                                         "query":  "INSERT INTO tags (name, color, scope) VALUES (\u0027{{ $json.body.name }}\u0027, \u0027{{ $json.body.color }}\u0027, \u0027global\u0027) ON CONFLICT (name, scope) DO UPDATE SET color = EXCLUDED.color RETURNING id::TEXT, name, color, scope;",
+                                         "operation":  "executeQuery",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.postgres",
+                      "position":  [
+                                       240,
+                                       1500
+                                   ],
+                      "typeVersion":  2.5
+                  },
+                  {
+                      "id":  "code-fmt-create-tag",
+                      "name":  "Format: Created Tag",
+                      "parameters":  {
+                                         "jsCode":  "const row = $input.first().json;\nreturn [{ json: row }];"
+                                     },
+                      "type":  "n8n-nodes-base.code",
+                      "position":  [
+                                       480,
+                                       1500
+                                   ],
+                      "typeVersion":  2
+                  },
+                  {
+                      "id":  "res-create-tag",
+                      "name":  "RES: Create Tag",
+                      "parameters":  {
+                                         "responseBody":  "={{ $json }}",
+                                         "respondWith":  "json",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "position":  [
+                                       720,
+                                       1500
+                                   ],
+                      "typeVersion":  1.1
+                  },
+                  {
+                      "id":  "wh-delete-tag",
+                      "name":  "WH: Delete Tag",
+                      "parameters":  {
+                                         "path":  "admin/tags/:tagId",
+                                         "responseMode":  "responseNode",
+                                         "options":  {
+
+                                                     },
+                                         "httpMethod":  "DELETE"
+                                     },
+                      "type":  "n8n-nodes-base.webhook",
+                      "position":  [
+                                       0,
+                                       1800
+                                   ],
+                      "typeVersion":  2
+                  },
+                  {
+                      "id":  "pg-delete-tag",
+                      "name":  "PG: Delete Tag",
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "n5ShY9BluRF19UVO",
+                                                           "name":  "Postgres account"
+                                                       }
+                                      },
+                      "parameters":  {
+                                         "query":  "DELETE FROM conversation_tags WHERE tag_id = \u0027{{ $json.params.tagId }}\u0027::UUID; DELETE FROM tags WHERE id = \u0027{{ $json.params.tagId }}\u0027::UUID RETURNING id::TEXT;",
+                                         "operation":  "executeQuery",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.postgres",
+                      "position":  [
+                                       240,
+                                       1800
+                                   ],
+                      "typeVersion":  2.5
+                  },
+                  {
+                      "id":  "res-delete-tag",
+                      "name":  "RES: Delete Tag",
+                      "parameters":  {
+                                         "responseBody":  "={{ {\"success\": true} }}",
+                                         "respondWith":  "json",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "position":  [
+                                       480,
+                                       1800
+                                   ],
+                      "typeVersion":  1.1
+                  }
+              ],
+    "connections":  {
+                        "WH: Get Conversations":  {
+                                                      "main":  [
+                                                                   [
+                                                                       {
+                                                                           "node":  "PG: Get Conversations",
+                                                                           "type":  "main",
+                                                                           "index":  0
+                                                                       }
+                                                                   ]
+                                                               ]
+                                                  },
+                        "PG: Get Conversations":  {
+                                                      "main":  [
+                                                                   [
+                                                                       {
+                                                                           "node":  "Format: Conversations",
+                                                                           "type":  "main",
+                                                                           "index":  0
+                                                                       }
+                                                                   ]
+                                                               ]
+                                                  },
+                        "Format: Conversations":  {
+                                                      "main":  [
+                                                                   [
+                                                                       {
+                                                                           "node":  "RES: Get Conversations",
+                                                                           "type":  "main",
+                                                                           "index":  0
+                                                                       }
+                                                                   ]
+                                                               ]
+                                                  },
+                        "WH: Get Messages":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "PG: Get Messages",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "PG: Get Messages":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "Format: Messages",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "Format: Messages":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "RES: Get Messages",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "WH: Send Message":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "PG: Save Admin Message",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "PG: Save Admin Message":  {
+                                                       "main":  [
+                                                                    [
+                                                                        {
+                                                                            "node":  "LINE: Push Message",
+                                                                            "type":  "main",
+                                                                            "index":  0
+                                                                        }
+                                                                    ]
+                                                                ]
+                                                   },
+                        "LINE: Push Message":  {
+                                                   "main":  [
+                                                                [
+                                                                    {
+                                                                        "node":  "Format: Send Response",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ]
+                                                            ]
+                                               },
+                        "Format: Send Response":  {
+                                                      "main":  [
+                                                                   [
+                                                                       {
+                                                                           "node":  "RES: Send Message",
+                                                                           "type":  "main",
+                                                                           "index":  0
+                                                                       }
+                                                                   ]
+                                                               ]
+                                                  },
+                        "WH: Manage Tags":  {
+                                                "main":  [
+                                                             [
+                                                                 {
+                                                                     "node":  "Code: Parse Tags",
+                                                                     "type":  "main",
+                                                                     "index":  0
+                                                                 }
+                                                             ]
+                                                         ]
+                                            },
+                        "Code: Parse Tags":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "PG: Replace Tags",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "PG: Replace Tags":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "Format: Tags Response",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "Format: Tags Response":  {
+                                                      "main":  [
+                                                                   [
+                                                                       {
+                                                                           "node":  "RES: Manage Tags",
+                                                                           "type":  "main",
+                                                                           "index":  0
+                                                                       }
+                                                                   ]
+                                                               ]
+                                                  },
+                        "WH: Dashboard Stats":  {
+                                                    "main":  [
+                                                                 [
+                                                                     {
+                                                                         "node":  "PG: Get Stats",
+                                                                         "type":  "main",
+                                                                         "index":  0
+                                                                     }
+                                                                 ]
+                                                             ]
+                                                },
+                        "PG: Get Stats":  {
+                                              "main":  [
+                                                           [
+                                                               {
+                                                                   "node":  "Format: Stats",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ]
+                                                       ]
+                                          },
+                        "Format: Stats":  {
+                                              "main":  [
+                                                           [
+                                                               {
+                                                                   "node":  "RES: Dashboard Stats",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ]
+                                                       ]
+                                          },
+                        "WH: Get Tags":  {
+                                             "main":  [
+                                                          [
+                                                              {
+                                                                  "node":  "PG: Get Tags",
+                                                                  "type":  "main",
+                                                                  "index":  0
+                                                              }
+                                                          ]
+                                                      ]
+                                         },
+                        "PG: Get Tags":  {
+                                             "main":  [
+                                                          [
+                                                              {
+                                                                  "node":  "Format: Tags List",
+                                                                  "type":  "main",
+                                                                  "index":  0
+                                                              }
+                                                          ]
+                                                      ]
+                                         },
+                        "Format: Tags List":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "RES: Get Tags",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ]
+                                                           ]
+                                              },
+                        "WH: Create Tag":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "PG: Create Tag",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "PG: Create Tag":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "Format: Created Tag",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "Format: Created Tag":  {
+                                                    "main":  [
+                                                                 [
+                                                                     {
+                                                                         "node":  "RES: Create Tag",
+                                                                         "type":  "main",
+                                                                         "index":  0
+                                                                     }
+                                                                 ]
+                                                             ]
+                                                },
+                        "WH: Delete Tag":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "PG: Delete Tag",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "PG: Delete Tag":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "RES: Delete Tag",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1"
+                 }
+}
