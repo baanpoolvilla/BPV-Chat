@@ -240,9 +240,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     get().markConversationRead(id);
 
     try {
-      // Check if conversation is already loaded in memory
+      // Check if conversation is already loaded in memory (preserve sent messages)
       const existingConversation = get().conversations.find((c) => c.id === id);
       if (existingConversation && existingConversation.messages.length > 0) {
+        // Mark as read locally
         if (existingConversation.unreadCount > 0) {
           const conversations = get().conversations.map((c) =>
             c.id === id ? { ...c, unreadCount: 0 } : c
@@ -252,8 +253,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           set({ messagesLoading: false });
         }
       } else {
-        // Fetch messages from API
-        const messages = await messagesAPI.getByConversation(id);
+        // First time loading — fetch messages directly from N8N
+        const rawMessages = await messagesAPI.getByConversation(id);
+        const messages = Array.isArray(rawMessages) ? rawMessages : [];
+
+        // Merge messages into existing conversation (ใช้ข้อมูล header จาก getAll ที่โหลดมาแล้ว)
         const conversations = get().conversations.map((c) =>
           c.id === id ? { ...c, messages, unreadCount: 0 } : c
         );

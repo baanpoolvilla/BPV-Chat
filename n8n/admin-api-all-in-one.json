@@ -89,11 +89,21 @@
       }
     },
     {
+      "id": "code-format-msgs",
+      "name": "Format: Messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 200],
+      "parameters": {
+        "jsCode": "const row = $input.first().json;\nlet messages = row.messages;\nif (typeof messages === 'string') {\n  try { messages = JSON.parse(messages); } catch { messages = []; }\n}\nif (!Array.isArray(messages)) messages = [];\nreturn [{ json: { messages, total: messages.length } }];"
+      }
+    },
+    {
       "id": "res-get-msgs",
       "name": "RES: Get Messages",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [480, 200],
+      "position": [720, 200],
       "parameters": {
         "respondWith": "firstIncomingItem",
         "options": {
@@ -501,6 +511,9 @@
       "main": [[{ "node": "PG: Get Messages", "type": "main", "index": 0 }]]
     },
     "PG: Get Messages": {
+      "main": [[{ "node": "Format: Messages", "type": "main", "index": 0 }]]
+    },
+    "Format: Messages": {
       "main": [[{ "node": "RES: Get Messages", "type": "main", "index": 0 }]]
     },
     "WH: Send Message": {

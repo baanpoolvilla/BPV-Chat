@@ -283,7 +283,7 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
           ref={scrollRef}
           className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#f0f2f5] scrollbar-thin"
         >
-          {conversation.messages?.length === 0 ? (
+          {!conversation.messages || !Array.isArray(conversation.messages) || conversation.messages.length === 0 ? (
             <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
               ยังไม่มีข้อความ
             </div>
