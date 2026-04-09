@@ -10,38 +10,27 @@ import {
 
 // ─────────────────────────────────────────────────────────────
 // URL Configuration
-//   NEXT_PUBLIC_MOCK_MODE=true   → ใช้ข้อมูลจาก mockData.ts (ว่างเปล่า)
-//   NEXT_PUBLIC_MOCK_MODE=false  → ส่ง request ไป N8N จริง
+//   NEXT_PUBLIC_MOCK_MODE=true   → ใช้ข้อมูลจาก mockData.ts
+//   NEXT_PUBLIC_MOCK_MODE=false  → ใช้ Next.js API Routes (/api/db/...)
+//                                   ต่อ Postgres โดยตรง (ไม่ผ่าน N8N)
 //
-// N8N Webhook endpoints (ตั้งค่าใน .env.local):
-//   NEXT_PUBLIC_N8N_URL=http://<N8N_HOST>:5678/webhook
-//
-// Endpoints ที่ต้องสร้าง N8N workflow:
-//   GET  /admin/conversations            → ดึง conversation list จาก chat_memory
-//   GET  /admin/conversations/:id        → ดึง messages ของ conversation นั้น
-//   POST /admin/messages/send            → admin ส่งข้อความ → LINE API
-//   POST /admin/conversations/:id/tags   → อัปเดตป้ายกำกับลูกค้า LINE
-//   GET  /admin/dashboard/stats          → ดึง count stats จาก Postgres
+// ตั้งค่าใน .env.local:
+//   DATABASE_URL=postgresql://postgres:123456@<HOST>:5432/chatbot
+//   LINE_CHANNEL_ACCESS_TOKEN=<token>
 // ─────────────────────────────────────────────────────────────
 
 const MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE !== 'false';
 
-// N8N webhook base URL — ใช้เมื่อ MOCK_MODE=false
-const N8N_URL =
-  process.env.NEXT_PUBLIC_N8N_URL || 'http://localhost:5678/webhook';
-
-// Next.js API routes (auth ยังคงใช้ local — ไม่ผ่าน N8N)
-const LOCAL_API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
-
-// Axios instance สำหรับ N8N
-const n8nClient: AxiosInstance = axios.create({
-  baseURL: N8N_URL,
+// Axios instance สำหรับเรียก Next.js API routes (same-origin)
+const dbClient: AxiosInstance = axios.create({
+  baseURL: '/api/db',
   headers: { 'Content-Type': 'application/json' },
   timeout: 15000,
 });
 
 // Axios instance สำหรับ local Next.js API (auth ฯลฯ)
+const LOCAL_API_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
 const apiClient: AxiosInstance = axios.create({
   baseURL: LOCAL_API_URL,
   headers: { 'Content-Type': 'application/json' },
@@ -56,7 +45,7 @@ const addAuthToken = (config: any) => {
   return config;
 };
 apiClient.interceptors.request.use(addAuthToken);
-n8nClient.interceptors.request.use(addAuthToken);
+dbClient.interceptors.request.use(addAuthToken);
 
 // ─────────────────────────────────────────────────────────────
 // Auth APIs (local — ไม่ผ่าน N8N)
@@ -96,27 +85,20 @@ export const authAPI = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// Conversations APIs  →  N8N: GET /admin/conversations
+// Conversations APIs  →  Next.js API: /api/db/conversations
 // ─────────────────────────────────────────────────────────────
 export const conversationsAPI = {
-  /** N8N workflow: query chat_memory GROUP BY user_id + join admin_takeover */
   getAll: async (filters?: { status?: string; search?: string }): Promise<Conversation[]> => {
     if (MOCK_MODE) {
       await delay(300);
       return filterConversations(generateMockConversations(), filters?.status, filters?.search);
     }
 
-    // N8N webhook: GET /admin/conversations?status=bot&search=keyword
-    const response = await n8nClient.get('/admin/conversations', { params: filters });
-    // N8N returns { conversations: [...], total: N } — extract array
+    const response = await dbClient.get('/conversations', { params: filters });
     const data = response.data;
     return Array.isArray(data) ? data : (data.conversations || []);
   },
 
-  /**
-   * N8N ไม่มี endpoint GET /admin/conversations/:id โดยตรง
-   * → ใช้ข้อมูลจาก getAll ที่โหลดไว้แล้ว + ดึง messages จาก /messages endpoint
-   */
   getById: async (id: string): Promise<Conversation> => {
     if (MOCK_MODE) {
       await delay(200);
@@ -125,21 +107,18 @@ export const conversationsAPI = {
       return c;
     }
 
-    // ดึง messages จาก N8N endpoint
-    const response = await n8nClient.get('/admin/messages', { params: { conversationId: id } });
-    const msgData = response.data;
+    const msgResponse = await dbClient.get('/messages', { params: { conversationId: id } });
+    const msgData = msgResponse.data;
     const messages: Message[] = Array.isArray(msgData) ? msgData : (msgData.messages || []);
 
-    // ดึง conversation list เพื่อหาข้อมูล header (ถ้ายังไม่มี)
     let convData: any = null;
     try {
-      const listResponse = await n8nClient.get('/admin/conversations');
+      const listResponse = await dbClient.get('/conversations');
       const listData = listResponse.data;
       const convList = Array.isArray(listData) ? listData : (listData.conversations || []);
       convData = convList.find((c: any) => c.id === id);
-    } catch { /* ignore — ใช้ fallback */ }
+    } catch { /* ignore */ }
 
-    // สร้าง Conversation object สมบูรณ์
     return {
       id,
       customerUserId: convData?.customerUserId || id,
@@ -159,28 +138,19 @@ export const conversationsAPI = {
     };
   },
 
-  /** N8N workflow: UPDATE conversation status — ใช้ local state เป็นหลัก */
   updateStatus: async (id: string, status: 'open' | 'pending' | 'resolved' | 'archived'): Promise<Conversation> => {
-    if (MOCK_MODE) {
-      await delay(300);
-      return { id, status } as any;
-    }
-
-    // resolved/open/pending — ยังไม่มี endpoint, return local update
+    if (MOCK_MODE) { await delay(300); return { id, status } as any; }
+    // TODO: สร้าง endpoint ถ้าต้องการ persist status
     return { id, status } as any;
   },
 
-  /** N8N workflow: upsert LINE tags per user */
   updateTags: async (
     id: string,
     labels: Array<{ id: string; name: string; color: string }>
   ): Promise<Array<{ id: string; name: string; color: string }>> => {
-    if (MOCK_MODE) {
-      await delay(250);
-      return labels;
-    }
+    if (MOCK_MODE) { await delay(250); return labels; }
 
-    const response = await n8nClient.post('/admin/conversations/tags', {
+    const response = await dbClient.post('/conversations/tags', {
       conversationId: id,
       tags: labels.map((label) => ({ name: label.name, color: label.color })),
     });
@@ -190,94 +160,63 @@ export const conversationsAPI = {
   },
 
   markAsRead: async (id: string): Promise<void> => {
-    // ยังไม่มี endpoint ใน N8N — no-op
     if (MOCK_MODE) { await delay(100); }
   },
 
-  /** N8N workflow: COUNT queries on chat_memory + admin_takeover */
   getStats: async (): Promise<Stats> => {
     if (MOCK_MODE) { await delay(300); return mockStats; }
-
-    // N8N webhook: GET /admin/dashboard/stats
-    const response = await n8nClient.get('/admin/dashboard/stats');
+    const response = await dbClient.get('/dashboard/stats');
     return response.data;
   },
 };
 
 // ─────────────────────────────────────────────────────────────
-// Messages APIs  →  N8N: POST /admin/messages/send
+// Messages APIs  →  Next.js API: /api/db/messages
 // ─────────────────────────────────────────────────────────────
 export const messagesAPI = {
-  /** N8N workflow: SELECT * FROM chat_memory WHERE user_id = :id ORDER BY created_at */
   getByConversation: async (conversationId: string): Promise<Message[]> => {
     if (MOCK_MODE) {
       await delay(200);
       return getMockConversationById(conversationId)?.messages || [];
     }
 
-    const normaliseMessages = (payload: any): Message[] => {
-      let messages = Array.isArray(payload)
-        ? payload
-        : (payload?.messages ?? payload ?? []);
-      if (typeof messages === 'string') {
-        try { messages = JSON.parse(messages); } catch { messages = []; }
-      }
-      return Array.isArray(messages) ? messages : [];
-    };
-
-    // รองรับทั้ง workflow แบบ GET /admin/messages และแบบเก่า POST /admin/messages/get
-    try {
-      const response = await n8nClient.get('/admin/messages', { params: { conversationId } });
-      return normaliseMessages(response.data);
-    } catch {
-      const fallbackResponse = await n8nClient.post('/admin/messages/get', { conversationId });
-      return normaliseMessages(fallbackResponse.data);
+    const response = await dbClient.get('/messages', { params: { conversationId } });
+    const data = response.data;
+    let messages = Array.isArray(data) ? data : (data.messages || []);
+    if (typeof messages === 'string') {
+      try { messages = JSON.parse(messages); } catch { messages = []; }
     }
+    return Array.isArray(messages) ? messages : [];
   },
 
-  /**
-   * N8N workflow: รับข้อความจาก admin → INSERT chat_memory (role=admin) →
-   * POST LINE Push Message API → return message object
-   */
   send: async (conversationId: string, content: string, type: 'admin' = 'admin'): Promise<Message> => {
     if (MOCK_MODE) {
       await delay(400);
       return generateMockMessage(conversationId, content, type);
     }
 
-    // N8N webhook: POST /admin/messages/send { conversationId, content, type }
-    const response = await n8nClient.post('/admin/messages/send', {
-      conversationId,
-      content,
-      type,
-    });
+    const response = await dbClient.post('/messages', { conversationId, content, type });
     return response.data;
   },
-
 };
 
 // ─────────────────────────────────────────────────────────────
-// Dashboard APIs  →  N8N: GET /admin/dashboard/stats
+// Dashboard APIs  →  Next.js API: /api/db/dashboard/stats
 // ─────────────────────────────────────────────────────────────
 export const dashboardAPI = {
-  /** N8N workflow: aggregate queries จาก Postgres */
   getStats: async (): Promise<Stats> => {
     if (MOCK_MODE) { await delay(300); return mockStats; }
-
-    // N8N webhook: GET /admin/dashboard/stats
-    const response = await n8nClient.get('/admin/dashboard/stats');
+    const response = await dbClient.get('/dashboard/stats');
     return response.data;
   },
 
-  /** N8N workflow: SELECT latest conversations + unread counts */
   getRecentConversations: async (limit = 10): Promise<Conversation[]> => {
     if (MOCK_MODE) {
       await delay(300);
       return generateMockConversations().slice(0, limit);
     }
 
-    // N8N webhook: GET /admin/conversations?limit=10&sort=recent
-    const response = await n8nClient.get('/admin/conversations', {
+    const response = await dbClient.get('/conversations', {
       params: { limit, sort: 'recent' },
     });
     const data = response.data;
@@ -349,25 +288,25 @@ export const lineAPI = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// Tags APIs  →  N8N: GET/POST/DELETE /admin/tags
+// Tags APIs  →  Next.js API: /api/db/tags
 // ─────────────────────────────────────────────────────────────
 export const tagsAPI = {
   getAll: async (): Promise<Tag[]> => {
     if (MOCK_MODE) { await delay(200); return []; }
-    const response = await n8nClient.get('/admin/tags');
+    const response = await dbClient.get('/tags');
     const data = response.data;
     return Array.isArray(data) ? data : (data.tags || data || []);
   },
 
   create: async (name: string, color: string, scope: string = 'global'): Promise<Tag> => {
     if (MOCK_MODE) { await delay(200); return { id: Date.now().toString(), name, color, scope }; }
-    const response = await n8nClient.post('/admin/tags', { name, color, scope });
+    const response = await dbClient.post('/tags', { name, color, scope });
     return response.data;
   },
 
   delete: async (tagId: string): Promise<void> => {
     if (MOCK_MODE) { await delay(200); return; }
-    await n8nClient.post('/admin/tags/delete', { tagId });
+    await dbClient.post('/tags/delete', { tagId });
   },
 };
 
