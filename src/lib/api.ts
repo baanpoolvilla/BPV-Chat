@@ -215,16 +215,24 @@ export const messagesAPI = {
       return getMockConversationById(conversationId)?.messages || [];
     }
 
-    // N8N webhook: GET /admin/messages?conversationId=xxx
-    const response = await n8nClient.get('/admin/messages', { params: { conversationId } });
-    // N8N returns { messages: [...], total: N } — extract array
-    const data = response.data;
-    let messages = Array.isArray(data) ? data : (data.messages || data || []);
-    // Handle case where messages might be a JSON string from Postgres json_agg
-    if (typeof messages === 'string') {
-      try { messages = JSON.parse(messages); } catch { messages = []; }
+    const normaliseMessages = (payload: any): Message[] => {
+      let messages = Array.isArray(payload)
+        ? payload
+        : (payload?.messages ?? payload ?? []);
+      if (typeof messages === 'string') {
+        try { messages = JSON.parse(messages); } catch { messages = []; }
+      }
+      return Array.isArray(messages) ? messages : [];
+    };
+
+    // รองรับทั้ง workflow แบบ GET /admin/messages และแบบเก่า POST /admin/messages/get
+    try {
+      const response = await n8nClient.get('/admin/messages', { params: { conversationId } });
+      return normaliseMessages(response.data);
+    } catch {
+      const fallbackResponse = await n8nClient.post('/admin/messages/get', { conversationId });
+      return normaliseMessages(fallbackResponse.data);
     }
-    return Array.isArray(messages) ? messages : [];
   },
 
   /**

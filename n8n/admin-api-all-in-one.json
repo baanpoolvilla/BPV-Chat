@@ -408,7 +408,7 @@
       },
       "parameters": {
         "operation": "executeQuery",
-        "query": "CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_name_scope ON tags (name, scope);\nINSERT INTO tags (name, color, scope)\nVALUES ('{{ $json.name }}', '{{ $json.color }}', '{{ $json.scope }}')\nON CONFLICT (name, scope) DO UPDATE SET color = EXCLUDED.color\nRETURNING id::TEXT, name, color, scope;",
+        "query": "DO $$\nBEGIN\n  IF EXISTS (\n    SELECT 1\n    FROM information_schema.columns\n    WHERE table_schema = 'public'\n      AND table_name = 'tags'\n      AND column_name = 'scope'\n      AND udt_name = 'tag_scope'\n  ) THEN\n    ALTER TABLE tags ALTER COLUMN scope TYPE VARCHAR(100) USING scope::TEXT;\n  END IF;\nEND $$;\nCREATE UNIQUE INDEX IF NOT EXISTS idx_tags_name_scope ON tags (name, scope);\nINSERT INTO tags (name, color, scope)\nVALUES ('{{ $json.name }}', '{{ $json.color }}', '{{ $json.scope }}')\nON CONFLICT (name, scope) DO UPDATE SET color = EXCLUDED.color\nRETURNING id::TEXT, name, color, scope;",
         "options": {}
       }
     },
